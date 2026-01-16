@@ -1,0 +1,28 @@
+{
+  "name": "ota-update",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Self-hosted OTA update system for React Native/Expo apps",
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "dev:server": "npm run dev -w @ota-update/server",
+    "build:server": "npm run build -w @ota-update/server",
+    "deploy:server": "npm run deploy -w @ota-update/server",
+    "build:cli": "npm run build -w @ota-update/cli",
+    "build:sdk": "npm run build -w @ota-update/react-native",
+    "build:all": "npm run build --workspaces",
+    "lint": "eslint packages/*/src --ext .ts,.tsx",
+    "typecheck": "tsc --build"
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.0",
+    "typescript": "^5.3.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "author": "",
+  "license": "MIT"
+}
