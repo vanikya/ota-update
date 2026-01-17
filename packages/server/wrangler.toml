@@ -6,12 +6,12 @@ compatibility_date = "2024-01-01"
 [[d1_databases]]
 binding = "DB"
 database_name = "ota-update-db"
-database_id = "YOUR_D1_DATABASE_ID"  # Replace after creating with: wrangler d1 create ota-update-db
+database_id = "2151f4f3-33a6-4e10-af3c-ded8e1cfbc8e"
 
 # KV Namespace for caching
 [[kv_namespaces]]
 binding = "CACHE"
-id = "YOUR_KV_NAMESPACE_ID"  # Replace after creating with: wrangler kv:namespace create CACHE
+id = "252275fa877e45c3902ed48905e98f33"
 
 # R2 Bucket for bundle storage
 [[r2_buckets]]
