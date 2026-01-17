@@ -1,6 +1,10 @@
 import * as fs from 'fs';
 import nacl from 'tweetnacl';
-import { loadSigningKeys, saveSigningKeys, SigningKeys } from '../config.js';
+import { loadSigningKeys as loadKeys, saveSigningKeys, SigningKeys } from '../config.js';
+
+// Re-export for convenience
+export { SigningKeys } from '../config.js';
+export const loadSigningKeys = loadKeys;
 
 // Convert Uint8Array to hex string
 function toHex(arr: Uint8Array): string {
@@ -55,7 +59,7 @@ export function verifySignature(
 // Generate and save keys for an app
 export function setupSigningForApp(appSlug: string): SigningKeys {
   // Check if keys already exist
-  const existing = loadSigningKeys(appSlug);
+  const existing = loadKeys(appSlug);
   if (existing) {
     return existing;
   }
@@ -69,7 +73,7 @@ export function setupSigningForApp(appSlug: string): SigningKeys {
 
 // Get keys or throw if not found
 export function getSigningKeys(appSlug: string): SigningKeys {
-  const keys = loadSigningKeys(appSlug);
+  const keys = loadKeys(appSlug);
   if (!keys) {
     throw new Error(
       `No signing keys found for app "${appSlug}". ` +

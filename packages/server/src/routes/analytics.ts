@@ -10,7 +10,7 @@ analytics.use('*', appAccessMiddleware());
 
 // Get analytics overview for an app
 analytics.get('/', async (c) => {
-  const appId = c.req.param('appId');
+  const appId = c.req.param('appId')!;
   const days = parseInt(c.req.query('days') || '7', 10);
   const releaseId = c.req.query('releaseId');
 
@@ -102,8 +102,8 @@ analytics.get('/', async (c) => {
 
 // Get analytics for a specific release
 analytics.get('/releases/:releaseId', async (c) => {
-  const appId = c.req.param('appId');
-  const releaseId = c.req.param('releaseId');
+  const appId = c.req.param('appId')!;
+  const releaseId = c.req.param('releaseId')!;
 
   // Verify release belongs to app
   const release = await c.env.DB.prepare(`
@@ -161,7 +161,7 @@ analytics.get('/releases/:releaseId', async (c) => {
 
 // Get devices that failed to update
 analytics.get('/failures', async (c) => {
-  const appId = c.req.param('appId');
+  const appId = c.req.param('appId')!;
   const releaseId = c.req.query('releaseId');
   const limit = parseInt(c.req.query('limit') || '50', 10);
   const offset = parseInt(c.req.query('offset') || '0', 10);

@@ -64,7 +64,7 @@ export function authMiddleware(requiredPermissions?: ('full' | 'read' | 'deploy'
 }
 
 // Get auth context from Hono context
-export function getAuth(c: Context<{ Variables: { auth: AuthContext } }>): AuthContext {
+export function getAuth(c: Context<{ Bindings: Env; Variables: { auth: AuthContext } }>): AuthContext {
   return c.get('auth');
 }
 

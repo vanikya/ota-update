@@ -14,7 +14,7 @@ releases.use('*', appAccessMiddleware());
 
 // List releases for an app
 releases.get('/', async (c) => {
-  const appId = c.req.param('appId');
+  const appId = c.req.param('appId')!;
   const channelName = c.req.query('channel');
   const limit = parseInt(c.req.query('limit') || '20', 10);
   const offset = parseInt(c.req.query('offset') || '0', 10);
@@ -40,7 +40,7 @@ releases.get('/', async (c) => {
 
   // Get total count
   let countQuery = 'SELECT COUNT(*) as count FROM releases r LEFT JOIN channels ch ON r.channel_id = ch.id WHERE r.app_id = ?';
-  const countParams: string[] = [appId];
+  const countParams: (string | number)[] = [appId];
   if (channelName) {
     countQuery += ' AND ch.name = ?';
     countParams.push(channelName);
@@ -58,7 +58,7 @@ releases.get('/', async (c) => {
 // Create a new release (upload bundle)
 releases.post('/', async (c) => {
   const auth = getAuth(c);
-  const appId = c.req.param('appId');
+  const appId = c.req.param('appId')!;
 
   if (auth.permissions === 'read') {
     return c.json({ error: 'Insufficient permissions' }, 403);
@@ -186,8 +186,8 @@ releases.post('/', async (c) => {
 
 // Get a single release
 releases.get('/:releaseId', async (c) => {
-  const appId = c.req.param('appId');
-  const releaseId = c.req.param('releaseId');
+  const appId = c.req.param('appId')!;
+  const releaseId = c.req.param('releaseId')!;
 
   const release = await c.env.DB.prepare(`
     SELECT r.*, ro.percentage as rollout_percentage, ro.is_active as rollout_active,
@@ -219,8 +219,8 @@ releases.get('/:releaseId', async (c) => {
 // Update rollout percentage
 releases.patch('/:releaseId/rollout', async (c) => {
   const auth = getAuth(c);
-  const appId = c.req.param('appId');
-  const releaseId = c.req.param('releaseId');
+  const appId = c.req.param('appId')!;
+  const releaseId = c.req.param('releaseId')!;
 
   if (auth.permissions === 'read') {
     return c.json({ error: 'Insufficient permissions' }, 403);
@@ -262,8 +262,8 @@ releases.patch('/:releaseId/rollout', async (c) => {
 // Rollback to a previous release
 releases.post('/:releaseId/rollback', async (c) => {
   const auth = getAuth(c);
-  const appId = c.req.param('appId');
-  const releaseId = c.req.param('releaseId');
+  const appId = c.req.param('appId')!;
+  const releaseId = c.req.param('releaseId')!;
 
   if (auth.permissions === 'read') {
     return c.json({ error: 'Insufficient permissions' }, 403);
@@ -300,8 +300,8 @@ releases.post('/:releaseId/rollback', async (c) => {
 // Delete a release
 releases.delete('/:releaseId', async (c) => {
   const auth = getAuth(c);
-  const appId = c.req.param('appId');
-  const releaseId = c.req.param('releaseId');
+  const appId = c.req.param('appId')!;
+  const releaseId = c.req.param('releaseId')!;
 
   if (auth.permissions !== 'full') {
     return c.json({ error: 'Insufficient permissions' }, 403);

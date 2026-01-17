@@ -88,6 +88,11 @@ export interface CheckUpdateRequest {
   currentVersion: string | null;
   appVersion: string;
   deviceId: string;
+  deviceInfo?: {
+    os: string;
+    osVersion: string;
+    [key: string]: unknown;
+  };
 }
 
 export interface CheckUpdateResponse {
