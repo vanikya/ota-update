@@ -67,7 +67,7 @@ export async function createBundle(
   const bundlePath = path.join(outputDir, bundleFileName);
   const sourcemapPath = path.join(outputDir, sourcemapFileName);
 
-  // For Expo, detect entry file from package.json "main" field or use node_modules/expo/AppEntry.js
+  // For Expo, detect entry file from package.json "main" field
   let entryFile = options.entryFile;
 
   if (!entryFile) {
@@ -76,17 +76,31 @@ export async function createBundle(
       const packageJsonPath = path.join(cwd, 'package.json');
       const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, 'utf-8'));
 
-      if (packageJson.main && fs.existsSync(path.join(cwd, packageJson.main))) {
-        entryFile = packageJson.main;
-      } else if (fs.existsSync(path.join(cwd, 'index.js'))) {
-        entryFile = 'index.js';
-      } else if (fs.existsSync(path.join(cwd, 'App.js'))) {
-        entryFile = 'node_modules/expo/AppEntry.js';
-      } else if (fs.existsSync(path.join(cwd, 'App.tsx'))) {
-        entryFile = 'node_modules/expo/AppEntry.js';
-      } else {
-        // Expo Router or other setups - use expo's AppEntry
-        entryFile = 'node_modules/expo/AppEntry.js';
+      if (packageJson.main) {
+        // Main could be a module path (expo-router/entry) or a file path
+        if (packageJson.main.includes('/') && !packageJson.main.startsWith('.')) {
+          // Module path like "expo-router/entry" - resolve to node_modules
+          entryFile = `node_modules/${packageJson.main}.js`;
+          // Check if it exists, some might not have .js extension in the actual file
+          if (!fs.existsSync(path.join(cwd, entryFile))) {
+            entryFile = `node_modules/${packageJson.main}`;
+          }
+        } else if (fs.existsSync(path.join(cwd, packageJson.main))) {
+          entryFile = packageJson.main;
+        }
+      }
+
+      // Fallbacks if main didn't work
+      if (!entryFile) {
+        if (fs.existsSync(path.join(cwd, 'index.js'))) {
+          entryFile = 'index.js';
+        } else if (fs.existsSync(path.join(cwd, 'index.ts'))) {
+          entryFile = 'index.ts';
+        } else if (fs.existsSync(path.join(cwd, 'App.js')) || fs.existsSync(path.join(cwd, 'App.tsx'))) {
+          entryFile = 'node_modules/expo/AppEntry.js';
+        } else {
+          entryFile = 'node_modules/expo/AppEntry.js';
+        }
       }
     } else {
       // Bare React Native
