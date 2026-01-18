@@ -135,7 +135,7 @@ class OTAUpdate: NSObject {
     @objc
     func applyBundle(_ bundlePath: String, restart: Bool, resolver: @escaping RCTPromiseResolveBlock, rejecter: @escaping RCTPromiseRejectBlock) {
         // Store the bundle path for next launch
-        UserDefaults.standard.set(bundlePath, forKey: "OTAUpdate_BundlePath")
+        UserDefaults.standard.set(bundlePath, forKey: "OTAUpdateBundlePath")
         UserDefaults.standard.synchronize()
 
         if restart {
@@ -151,13 +151,13 @@ class OTAUpdate: NSObject {
 
     @objc
     func getPendingBundlePath(_ resolver: @escaping RCTPromiseResolveBlock, rejecter: @escaping RCTPromiseRejectBlock) {
-        let path = UserDefaults.standard.string(forKey: "OTAUpdate_BundlePath")
+        let path = UserDefaults.standard.string(forKey: "OTAUpdateBundlePath")
         resolver(path)
     }
 
     @objc
     func clearPendingBundle(_ resolver: @escaping RCTPromiseResolveBlock, rejecter: @escaping RCTPromiseRejectBlock) {
-        UserDefaults.standard.removeObject(forKey: "OTAUpdate_BundlePath")
+        UserDefaults.standard.removeObject(forKey: "OTAUpdateBundlePath")
         UserDefaults.standard.synchronize()
         resolver(nil)
     }
