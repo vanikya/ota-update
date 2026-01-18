@@ -67,17 +67,39 @@ export async function createBundle(
   const bundlePath = path.join(outputDir, bundleFileName);
   const sourcemapPath = path.join(outputDir, sourcemapFileName);
 
-  const entryFile = options.entryFile || (projectType === 'expo' ? 'index.js' : `index.${options.platform}.js`);
+  // For Expo, detect entry file from package.json "main" field or use node_modules/expo/AppEntry.js
+  let entryFile = options.entryFile;
 
-  // Check if entry file exists, fallback to index.js
-  const actualEntryFile = fs.existsSync(path.join(cwd, entryFile))
-    ? entryFile
-    : 'index.js';
+  if (!entryFile) {
+    if (projectType === 'expo') {
+      // Check package.json for main entry
+      const packageJsonPath = path.join(cwd, 'package.json');
+      const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, 'utf-8'));
+
+      if (packageJson.main && fs.existsSync(path.join(cwd, packageJson.main))) {
+        entryFile = packageJson.main;
+      } else if (fs.existsSync(path.join(cwd, 'index.js'))) {
+        entryFile = 'index.js';
+      } else if (fs.existsSync(path.join(cwd, 'App.js'))) {
+        entryFile = 'node_modules/expo/AppEntry.js';
+      } else if (fs.existsSync(path.join(cwd, 'App.tsx'))) {
+        entryFile = 'node_modules/expo/AppEntry.js';
+      } else {
+        // Expo Router or other setups - use expo's AppEntry
+        entryFile = 'node_modules/expo/AppEntry.js';
+      }
+    } else {
+      // Bare React Native
+      entryFile = fs.existsSync(path.join(cwd, `index.${options.platform}.js`))
+        ? `index.${options.platform}.js`
+        : 'index.js';
+    }
+  }
 
   if (projectType === 'expo') {
     await bundleWithExpo(cwd, {
       platform: options.platform,
-      entryFile: actualEntryFile,
+      entryFile,
       bundlePath,
       sourcemapPath,
       dev: options.dev ?? false,
@@ -86,7 +108,7 @@ export async function createBundle(
   } else {
     await bundleWithMetro(cwd, {
       platform: options.platform,
-      entryFile: actualEntryFile,
+      entryFile,
       bundlePath,
       sourcemapPath,
       dev: options.dev ?? false,
