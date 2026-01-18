@@ -1,5 +1,7 @@
 # OTA Update
 
+> **Beta Notice**: This package is currently in beta. Testing is in progress and APIs may change. Use in production at your own discretion. We welcome feedback and bug reports via [GitHub Issues](https://github.com/vanikya/ota-update/issues).
+
 A self-hosted Over-The-Air (OTA) update system for React Native and Expo apps. Replace EAS Updates or Microsoft CodePush with your own infrastructure built on Cloudflare's edge network.
 
 ## Features
@@ -283,19 +285,19 @@ ota apps delete app_xxxxx --force
 
 ```bash
 # Publish a release (builds bundle automatically)
-ota release --version 1.0.1 --channel production --platform ios
+ota release -v 1.0.1 --channel production --platform ios
 
 # With release notes
-ota release --version 1.0.1 --notes "Bug fixes and improvements"
+ota release -v 1.0.1 --notes "Bug fixes and improvements"
 
 # Mandatory update
-ota release --version 1.0.1 --mandatory
+ota release -v 1.0.1 --mandatory
 
 # Gradual rollout (10% of users)
-ota release --version 1.0.1 --rollout 10
+ota release -v 1.0.1 --rollout 10
 
 # Use pre-built bundle
-ota release --version 1.0.1 --bundle ./dist/main.jsbundle
+ota release -v 1.0.1 --bundle ./dist/main.jsbundle
 
 # List releases
 ota releases --app my-app --channel production

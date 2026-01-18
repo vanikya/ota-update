@@ -1,4 +1,6 @@
-# @ota-update/cli
+# @vanikya/ota-cli
+
+> **Beta Notice**: This package is currently in beta. Testing is in progress and APIs may change. Use in production at your own discretion. We welcome feedback and bug reports via [GitHub Issues](https://github.com/vanikya/ota-update/issues).
 
 CLI tool for managing OTA (Over-The-Air) updates for React Native and Expo apps. A self-hosted alternative to CodePush and EAS Updates.
 

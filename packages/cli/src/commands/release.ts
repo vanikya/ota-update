@@ -13,7 +13,7 @@ export function createReleaseCommand(): Command {
     .description('Create and publish a new release')
     .option('--app <slug>', 'App slug')
     .option('--channel <name>', 'Channel name (default: production)')
-    .option('--version <version>', 'Version string (e.g., 1.0.0)')
+    .option('-v, --release-version <version>', 'Version string (e.g., 1.0.0)')
     .option('--platform <platform>', 'Platform (ios, android)')
     .option('--bundle <path>', 'Path to pre-built bundle (skip building)')
     .option('--sourcemap <path>', 'Path to sourcemap file')
@@ -52,7 +52,7 @@ export function createReleaseCommand(): Command {
         const channel = options.channel || projectConfig?.channel || 'production';
 
         // Resolve version
-        let version = options.version;
+        let version = options.releaseVersion;
         if (!version) {
           // Try to get from package.json
           if (fs.existsSync('package.json')) {
