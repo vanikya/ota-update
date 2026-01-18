@@ -1,6 +1,6 @@
 {
   "name": "@vanikya/ota-react-native",
-  "version": "0.1.2",
+  "version": "0.1.4",
   "description": "OTA Update SDK for React Native apps - self-hosted CodePush/EAS Updates alternative",
   "main": "lib/commonjs/index.js",
   "module": "lib/module/index.js",
@@ -10,9 +10,10 @@
   "files": [
     "src",
     "lib",
-    "ios",
     "android",
+    "ios",
     "*.podspec",
+    "react-native.config.js",
     "README.md"
   ],
   "scripts": {
@@ -56,7 +57,9 @@
   },
   "peerDependencies": {
     "react": ">=17.0.0",
-    "react-native": ">=0.70.0"
+    "react-native": ">=0.70.0",
+    "expo-file-system": ">=15.0.0",
+    "expo-crypto": ">=12.0.0"
   },
   "peerDependenciesMeta": {
     "expo-file-system": {
@@ -74,10 +77,5 @@
       "module",
       "typescript"
     ]
-  },
-  "codegenConfig": {
-    "name": "OTAUpdateSpec",
-    "type": "modules",
-    "jsSrcsDir": "src"
   }
 }

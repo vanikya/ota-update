@@ -1,4 +1,6 @@
-# @ota-update/react-native
+# @vanikya/ota-react-native
+
+> **Beta Notice**: This package is currently in beta. Testing is in progress and APIs may change. Use in production at your own discretion. We welcome feedback and bug reports via [GitHub Issues](https://github.com/vanikya/ota-update/issues).
 
 React Native SDK for OTA (Over-The-Air) updates. A self-hosted alternative to CodePush and EAS Updates.
 
