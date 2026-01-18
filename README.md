@@ -39,7 +39,7 @@ A self-hosted Over-The-Air (OTA) update system for React Native and Expo apps. R
 ### 1. Clone and Install
 
 ```bash
-git clone https://github.com/your-org/ota-update.git
+git clone https://github.com/vanikya/ota-update.git
 cd ota-update
 npm install
 ```
@@ -97,7 +97,7 @@ npm run db:migrate:prod
 npm run deploy
 ```
 
-Note your Worker URL (e.g., `https://ota-update-server.your-subdomain.workers.dev`)
+Note your Worker URL (e.g., `https://ota-update-server.your-server.workers.dev`)
 
 ### 5. Set Up the CLI
 
@@ -142,10 +142,10 @@ ota apps create --name "My App" --slug my-app --platform both --init
 
 ```bash
 # For Expo projects
-npx expo install @ota-update/react-native
+npx expo install @vanikya/ota-react-native
 
 # For bare React Native
-npm install @ota-update/react-native
+npm install @vanikya/ota-react-native
 cd ios && pod install
 ```
 
@@ -154,14 +154,14 @@ cd ios && pod install
 ```tsx
 // App.tsx
 import React from 'react';
-import { OTAProvider } from '@ota-update/react-native';
+import { OTAProvider } from '@vanikya/ota-react-native';
 import { version } from './package.json';
 
 export default function App() {
   return (
     <OTAProvider
       config={{
-        serverUrl: 'https://ota-update-server.your-subdomain.workers.dev',
+        serverUrl: 'https://ota-update-server.your-server.workers.dev',
         appSlug: 'my-app',
         appVersion: version,
         channel: 'production',
@@ -179,7 +179,7 @@ export default function App() {
 ### Using the Hook
 
 ```tsx
-import { useOTA } from '@ota-update/react-native';
+import { useOTA } from '@vanikya/ota-react-native';
 
 function UpdateButton() {
   const {
@@ -215,7 +215,7 @@ function UpdateButton() {
 ### Update Banner Component
 
 ```tsx
-import { UpdateBanner } from '@ota-update/react-native';
+import { UpdateBanner } from '@vanikya/ota-react-native';
 
 function App() {
   return (

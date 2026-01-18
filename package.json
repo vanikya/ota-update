@@ -10,11 +10,14 @@
     "dev:server": "npm run dev -w @ota-update/server",
     "build:server": "npm run build -w @ota-update/server",
     "deploy:server": "npm run deploy -w @ota-update/server",
-    "build:cli": "npm run build -w @ota-update/cli",
-    "build:sdk": "npm run build -w @ota-update/react-native",
-    "build:all": "npm run build --workspaces",
+    "build:cli": "npm run build -w @vanikya/ota-cli",
+    "build:sdk": "npm run build -w @vanikya/ota-react-native",
+    "build:all": "npm run build:cli && npm run build:sdk",
     "lint": "eslint packages/*/src --ext .ts,.tsx",
-    "typecheck": "tsc --build"
+    "typecheck": "tsc --build",
+    "publish:cli": "npm publish -w @vanikya/ota-cli --access public",
+    "publish:sdk": "npm publish -w @vanikya/ota-react-native --access public",
+    "publish:all": "npm run build:all && npm run publish:cli && npm run publish:sdk"
   },
   "devDependencies": {
     "@types/node": "^20.10.0",
@@ -24,5 +27,13 @@
     "node": ">=18.0.0"
   },
   "author": "",
-  "license": "MIT"
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/vanikya/ota-update.git"
+  },
+  "homepage": "https://github.com/vanikya/ota-update#readme",
+  "bugs": {
+    "url": "https://github.com/vanikya/ota-update/issues"
+  }
 }

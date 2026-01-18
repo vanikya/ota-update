@@ -1,17 +1,47 @@
 {
-  "name": "@ota-update/cli",
-  "version": "0.1.0",
-  "description": "CLI tool for OTA Update system",
+  "name": "@vanikya/ota-cli",
+  "version": "0.1.2",
+  "description": "CLI tool for OTA Update system - self-hosted CodePush/EAS Updates alternative",
+  "type": "module",
   "bin": {
     "ota": "./dist/index.js"
   },
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
+  "files": [
+    "dist",
+    "README.md"
+  ],
   "scripts": {
-    "build": "tsup src/index.ts --format cjs --dts --clean",
-    "dev": "tsup src/index.ts --format cjs --watch",
+    "build": "tsup src/index.ts --format esm --dts --clean",
+    "dev": "tsup src/index.ts --format esm --watch",
     "start": "node dist/index.js",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "prepublishOnly": "npm run build"
+  },
+  "keywords": [
+    "react-native",
+    "ota",
+    "update",
+    "codepush",
+    "eas-updates",
+    "expo",
+    "cli",
+    "over-the-air"
+  ],
+  "author": "",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/vanikya/ota-update.git",
+    "directory": "packages/cli"
+  },
+  "homepage": "https://github.com/vanikya/ota-update#readme",
+  "bugs": {
+    "url": "https://github.com/vanikya/ota-update/issues"
+  },
+  "publishConfig": {
+    "access": "public"
   },
   "dependencies": {
     "chalk": "^5.3.0",

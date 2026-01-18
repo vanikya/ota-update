@@ -31,7 +31,7 @@ This guide explains how to integrate OTA Update into your existing Expo or React
 
 If you're self-hosting, deploy the server first. See the main [README.md](../README.md) for deployment instructions.
 
-**Your server URL:** `https://ota-update-server.muddy-grass-140b.workers.dev`
+**Your server URL:** `https://your-ota-server.workers.dev`
 
 ---
 
@@ -41,7 +41,7 @@ If you're self-hosting, deploy the server first. See the main [README.md](../REA
 
 ```bash
 # Option A: Install globally from npm (when published)
-npm install -g @ota-update/cli
+npm install -g @vanikya/ota-cli
 
 # Option B: Use from local build
 cd /path/to/ota-update/packages/cli
@@ -57,7 +57,7 @@ ota login
 
 # Or with flags
 ota login \
-  --server https://ota-update-server.muddy-grass-140b.workers.dev \
+  --server https://your-ota-server.workers.dev \
   --api-key YOUR_API_KEY
 ```
 
@@ -105,7 +105,7 @@ This creates `ota-update.json`:
 
 ```bash
 # Install the OTA Update SDK
-npx expo install @ota-update/react-native
+npx expo install @vanikya/ota-react-native
 
 # Install required Expo dependencies
 npx expo install expo-file-system expo-crypto
@@ -122,9 +122,9 @@ Expo handles everything automatically. The SDK uses `expo-file-system` for stora
 #### Step 1: Install the SDK
 
 ```bash
-npm install @ota-update/react-native
+npm install @vanikya/ota-react-native
 # or
-yarn add @ota-update/react-native
+yarn add @vanikya/ota-react-native
 ```
 
 #### Step 2: iOS Setup
@@ -160,7 +160,7 @@ Wrap your app with `OTAProvider`:
 ```tsx
 // App.tsx
 import React from 'react';
-import { OTAProvider } from '@ota-update/react-native';
+import { OTAProvider } from '@vanikya/ota-react-native';
 
 // Import your app version
 const APP_VERSION = '1.0.0'; // Or from package.json
@@ -169,7 +169,7 @@ export default function App() {
   return (
     <OTAProvider
       config={{
-        serverUrl: 'https://ota-update-server.muddy-grass-140b.workers.dev',
+        serverUrl: 'https://your-ota-server.workers.dev',
         appSlug: 'my-app',
         appVersion: APP_VERSION,
         channel: __DEV__ ? 'staging' : 'production',
@@ -221,7 +221,7 @@ export default function App() {
 Access update state and controls anywhere in your app:
 
 ```tsx
-import { useOTA } from '@ota-update/react-native';
+import { useOTA } from '@vanikya/ota-react-native';
 
 function MyComponent() {
   const {
@@ -250,7 +250,7 @@ function MyComponent() {
 ```tsx
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
-import { useOTA } from '@ota-update/react-native';
+import { useOTA } from '@vanikya/ota-react-native';
 
 export function UpdateBanner() {
   const { status, updateInfo, downloadProgress, downloadUpdate, applyUpdate } = useOTA();
@@ -320,7 +320,7 @@ const styles = StyleSheet.create({
 ```tsx
 import React from 'react';
 import { View, Text, Button, Alert } from 'react-native';
-import { useOTA } from '@ota-update/react-native';
+import { useOTA } from '@vanikya/ota-react-native';
 
 export function SettingsScreen() {
   const {
@@ -402,7 +402,7 @@ export function SettingsScreen() {
 ```tsx
 import { useEffect } from 'react';
 import { AppState } from 'react-native';
-import { useOTA } from '@ota-update/react-native';
+import { useOTA } from '@vanikya/ota-react-native';
 
 export function useSilentUpdates() {
   const { status, checkForUpdate, downloadUpdate, applyUpdate } = useOTA();
@@ -562,7 +562,7 @@ Add to your app:
 ### Using Without Provider
 
 ```tsx
-import { useOTAUpdate } from '@ota-update/react-native';
+import { useOTAUpdate } from '@vanikya/ota-react-native';
 
 function MyComponent() {
   const ota = useOTAUpdate({
@@ -606,7 +606,7 @@ npx expo install --remove expo-updates
 
 ```diff
 - import * as Updates from 'expo-updates';
-+ import { useOTA } from '@ota-update/react-native';
++ import { useOTA } from '@vanikya/ota-react-native';
 
 function MyComponent() {
 - const checkUpdate = async () => {
@@ -655,7 +655,7 @@ Remove CodePush from native files (iOS `AppDelegate`, Android `MainApplication`)
 
 ```diff
 - import codePush from 'react-native-code-push';
-+ import { OTAProvider } from '@ota-update/react-native';
++ import { OTAProvider } from '@vanikya/ota-react-native';
 
 - const App = () => { ... };
 - export default codePush(codePushOptions)(App);
@@ -737,8 +737,8 @@ ota apps delete <id>         # Delete app
 
 # Channels
 ota channels list            # List channels
-ota channels create <name>   # Create channel
-ota channels delete <name>   # Delete channel
+ota channels create <name> --app <slug>  # Create channel
+ota channels delete <name> --app <slug>  # Delete channel
 
 # Releases
 ota release                  # Publish update
@@ -760,5 +760,5 @@ ota init                     # Initialize project config
 
 ## Support
 
-- **Issues**: [GitHub Issues](https://github.com/your-org/ota-update/issues)
+- **Issues**: [GitHub Issues](https://github.com/vanikya/ota-update/issues)
 - **Documentation**: [Full README](../README.md)

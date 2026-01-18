@@ -1,7 +1,7 @@
 {
-  "name": "@ota-update/react-native",
+  "name": "@vanikya/ota-react-native",
   "version": "0.1.0",
-  "description": "OTA Update SDK for React Native apps",
+  "description": "OTA Update SDK for React Native apps - self-hosted CodePush/EAS Updates alternative",
   "main": "lib/commonjs/index.js",
   "module": "lib/module/index.js",
   "types": "lib/typescript/index.d.ts",
@@ -12,24 +12,38 @@
     "lib",
     "ios",
     "android",
-    "*.podspec"
+    "*.podspec",
+    "README.md"
   ],
   "scripts": {
     "build": "bob build",
     "typecheck": "tsc --noEmit",
     "lint": "eslint src --ext .ts,.tsx",
-    "prepare": "bob build"
+    "prepare": "bob build",
+    "prepublishOnly": "npm run build"
   },
   "keywords": [
     "react-native",
     "ota",
     "update",
     "codepush",
-    "expo"
+    "eas-updates",
+    "expo",
+    "over-the-air",
+    "hot-update"
   ],
+  "author": "",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/your-org/ota-update.git"
+    "url": "git+https://github.com/vanikya/ota-update.git",
+    "directory": "packages/react-native"
+  },
+  "homepage": "https://github.com/vanikya/ota-update#readme",
+  "bugs": {
+    "url": "https://github.com/vanikya/ota-update/issues"
+  },
+  "publishConfig": {
+    "access": "public"
   },
   "license": "MIT",
   "devDependencies": {
