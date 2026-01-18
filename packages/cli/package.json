@@ -1,6 +1,6 @@
 {
   "name": "@vanikya/ota-cli",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "CLI tool for OTA Update system - self-hosted CodePush/EAS Updates alternative",
   "type": "module",
   "bin": {
