@@ -28,11 +28,18 @@ function normalizePath(path: string): string {
 }
 
 // Try to use Expo FileSystem if available
+// Use legacy API to avoid deprecation warnings in expo-file-system v54+
 let ExpoFileSystem: any = null;
 try {
-  ExpoFileSystem = require('expo-file-system');
+  // Try legacy import first (expo-file-system v54+)
+  ExpoFileSystem = require('expo-file-system/legacy');
 } catch {
-  // Expo not available, will use native module
+  try {
+    // Fallback to regular import for older versions
+    ExpoFileSystem = require('expo-file-system');
+  } catch {
+    // Expo not available, will use native module
+  }
 }
 
 // Native module for bare React Native

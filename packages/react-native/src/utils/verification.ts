@@ -29,18 +29,8 @@ function hexToBytes(hex: string): Uint8Array {
 
 // Calculate SHA-256 hash of data
 export async function calculateHash(data: ArrayBuffer): Promise<string> {
-  if (ExpoCrypto) {
-    // Use Expo Crypto
-    const hash = await ExpoCrypto.digestStringAsync(
-      ExpoCrypto.CryptoDigestAlgorithm.SHA256,
-      bufferToHex(data),
-      { encoding: ExpoCrypto.CryptoEncoding.HEX }
-    );
-    return 'sha256:' + hash;
-  }
-
+  // Use native module first (most reliable for binary data)
   if (OTAUpdateNative?.calculateSHA256) {
-    // Use native module
     const bytes = new Uint8Array(data);
     let binary = '';
     for (let i = 0; i < bytes.length; i++) {
@@ -49,6 +39,15 @@ export async function calculateHash(data: ArrayBuffer): Promise<string> {
     const base64 = btoa(binary);
     const hash = await OTAUpdateNative.calculateSHA256(base64);
     return 'sha256:' + hash;
+  }
+
+  if (ExpoCrypto?.digest) {
+    // Use Expo Crypto digest (takes Uint8Array, returns ArrayBuffer)
+    const hashBuffer = await ExpoCrypto.digest(
+      ExpoCrypto.CryptoDigestAlgorithm.SHA256,
+      new Uint8Array(data)
+    );
+    return 'sha256:' + bufferToHex(hashBuffer);
   }
 
   // Fallback: Use SubtleCrypto (not available in all RN environments)
