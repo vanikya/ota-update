@@ -212,22 +212,29 @@ export class UpdateStorage {
     return normalizePath(bundlePath);
   }
 
+  // Get the raw bundle path (with file:// for Expo) - for internal storage operations
+  private getRawBundlePath(releaseId: string): string {
+    return `${this.baseDir}${releaseId}.bundle`;
+  }
+
   async getBundlePath(releaseId: string): Promise<string | null> {
-    const bundlePath = `${this.baseDir}${releaseId}.bundle`;
+    const bundlePath = this.getRawBundlePath(releaseId);
     const exists = await this.storage.exists(bundlePath);
     // Return normalized path for native module compatibility
     return exists ? normalizePath(bundlePath) : null;
   }
 
   async readBundle(releaseId: string): Promise<ArrayBuffer | null> {
-    const bundlePath = await this.getBundlePath(releaseId);
-    if (!bundlePath) return null;
+    const bundlePath = this.getRawBundlePath(releaseId);
+    const exists = await this.storage.exists(bundlePath);
+    if (!exists) return null;
 
+    // Use raw path for storage operations (expo needs file:// prefix)
     return this.storage.readFileAsBuffer(bundlePath);
   }
 
   async deleteBundle(releaseId: string): Promise<void> {
-    const bundlePath = `${this.baseDir}${releaseId}.bundle`;
+    const bundlePath = this.getRawBundlePath(releaseId);
     if (await this.storage.exists(bundlePath)) {
       await this.storage.deleteFile(bundlePath);
     }

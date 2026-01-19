@@ -1,0 +1,802 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>OTA Update - Self-hosted React Native Updates</title>
+  <meta name="description" content="A self-hosted alternative to CodePush and EAS Updates for React Native apps. Deploy updates instantly without app store reviews.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --yellow: #FFE566;
+      --pink: #FF6B9D;
+      --blue: #6BB3FF;
+      --green: #7CFF9B;
+      --purple: #B18CFF;
+      --orange: #FFB366;
+      --black: #1a1a1a;
+      --white: #FFFEF5;
+      --shadow: 4px 4px 0px var(--black);
+      --shadow-lg: 8px 8px 0px var(--black);
+    }
+
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: 'Space Grotesk', sans-serif;
+      background: var(--white);
+      color: var(--black);
+      line-height: 1.6;
+    }
+
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 0 24px;
+    }
+
+    /* Navigation */
+    nav {
+      background: var(--yellow);
+      border-bottom: 3px solid var(--black);
+      padding: 16px 0;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+
+    nav .container {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .logo {
+      font-size: 24px;
+      font-weight: 700;
+      text-decoration: none;
+      color: var(--black);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .logo-icon {
+      width: 32px;
+      height: 32px;
+      background: var(--black);
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--yellow);
+      font-size: 18px;
+    }
+
+    .nav-links {
+      display: flex;
+      gap: 24px;
+      list-style: none;
+    }
+
+    .nav-links a {
+      color: var(--black);
+      text-decoration: none;
+      font-weight: 500;
+      padding: 8px 16px;
+      border: 2px solid transparent;
+      transition: all 0.2s;
+    }
+
+    .nav-links a:hover {
+      border: 2px solid var(--black);
+      background: var(--white);
+    }
+
+    /* Hero Section */
+    .hero {
+      padding: 80px 0;
+      background: linear-gradient(180deg, var(--yellow) 0%, var(--white) 100%);
+      border-bottom: 3px solid var(--black);
+    }
+
+    .hero-content {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 60px;
+      align-items: center;
+    }
+
+    .hero-badge {
+      display: inline-block;
+      background: var(--pink);
+      border: 2px solid var(--black);
+      padding: 6px 16px;
+      font-size: 14px;
+      font-weight: 600;
+      margin-bottom: 20px;
+      box-shadow: var(--shadow);
+    }
+
+    .hero h1 {
+      font-size: 56px;
+      font-weight: 700;
+      line-height: 1.1;
+      margin-bottom: 24px;
+    }
+
+    .hero h1 span {
+      background: var(--blue);
+      padding: 0 8px;
+      border: 2px solid var(--black);
+    }
+
+    .hero p {
+      font-size: 20px;
+      margin-bottom: 32px;
+      max-width: 500px;
+    }
+
+    .hero-buttons {
+      display: flex;
+      gap: 16px;
+      flex-wrap: wrap;
+    }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 14px 28px;
+      font-size: 16px;
+      font-weight: 600;
+      text-decoration: none;
+      border: 3px solid var(--black);
+      cursor: pointer;
+      transition: all 0.2s;
+      font-family: inherit;
+    }
+
+    .btn-primary {
+      background: var(--black);
+      color: var(--white);
+      box-shadow: var(--shadow);
+    }
+
+    .btn-primary:hover {
+      transform: translate(2px, 2px);
+      box-shadow: 2px 2px 0px var(--black);
+    }
+
+    .btn-secondary {
+      background: var(--white);
+      color: var(--black);
+      box-shadow: var(--shadow);
+    }
+
+    .btn-secondary:hover {
+      background: var(--yellow);
+    }
+
+    .hero-visual {
+      position: relative;
+    }
+
+    .code-window {
+      background: var(--black);
+      border: 3px solid var(--black);
+      border-radius: 12px;
+      overflow: hidden;
+      box-shadow: var(--shadow-lg);
+    }
+
+    .code-header {
+      background: #2d2d2d;
+      padding: 12px 16px;
+      display: flex;
+      gap: 8px;
+    }
+
+    .code-dot {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+    }
+
+    .code-dot.red { background: #ff5f57; }
+    .code-dot.yellow { background: #febc2e; }
+    .code-dot.green { background: #28c840; }
+
+    .code-content {
+      padding: 20px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 14px;
+      color: #e0e0e0;
+      line-height: 1.8;
+    }
+
+    .code-content .keyword { color: #ff79c6; }
+    .code-content .string { color: #f1fa8c; }
+    .code-content .comment { color: #6272a4; }
+    .code-content .function { color: #50fa7b; }
+
+    /* Features Section */
+    .features {
+      padding: 80px 0;
+    }
+
+    .section-header {
+      text-align: center;
+      margin-bottom: 60px;
+    }
+
+    .section-header h2 {
+      font-size: 42px;
+      font-weight: 700;
+      margin-bottom: 16px;
+    }
+
+    .section-header p {
+      font-size: 18px;
+      max-width: 600px;
+      margin: 0 auto;
+    }
+
+    .features-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 24px;
+    }
+
+    .feature-card {
+      background: var(--white);
+      border: 3px solid var(--black);
+      padding: 32px;
+      box-shadow: var(--shadow);
+      transition: all 0.2s;
+    }
+
+    .feature-card:hover {
+      transform: translate(-2px, -2px);
+      box-shadow: 6px 6px 0px var(--black);
+    }
+
+    .feature-card:nth-child(1) { background: var(--yellow); }
+    .feature-card:nth-child(2) { background: var(--pink); }
+    .feature-card:nth-child(3) { background: var(--blue); }
+    .feature-card:nth-child(4) { background: var(--green); }
+    .feature-card:nth-child(5) { background: var(--purple); }
+    .feature-card:nth-child(6) { background: var(--orange); }
+
+    .feature-icon {
+      width: 48px;
+      height: 48px;
+      background: var(--black);
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--white);
+      font-size: 24px;
+      margin-bottom: 20px;
+    }
+
+    .feature-card h3 {
+      font-size: 20px;
+      font-weight: 700;
+      margin-bottom: 12px;
+    }
+
+    .feature-card p {
+      font-size: 15px;
+    }
+
+    /* Architecture Section */
+    .architecture {
+      padding: 80px 0;
+      background: var(--black);
+      color: var(--white);
+      border-top: 3px solid var(--black);
+      border-bottom: 3px solid var(--black);
+    }
+
+    .architecture h2 {
+      color: var(--white);
+    }
+
+    .arch-diagram {
+      background: #2d2d2d;
+      border: 3px solid var(--yellow);
+      border-radius: 12px;
+      padding: 40px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 13px;
+      overflow-x: auto;
+      margin-top: 40px;
+    }
+
+    .arch-diagram pre {
+      color: #e0e0e0;
+      line-height: 1.6;
+    }
+
+    /* Quickstart Section */
+    .quickstart {
+      padding: 80px 0;
+    }
+
+    .quickstart-steps {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 40px;
+    }
+
+    .step {
+      background: var(--white);
+      border: 3px solid var(--black);
+      box-shadow: var(--shadow);
+    }
+
+    .step-header {
+      background: var(--black);
+      color: var(--white);
+      padding: 16px 24px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .step-number {
+      width: 32px;
+      height: 32px;
+      background: var(--yellow);
+      color: var(--black);
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 700;
+    }
+
+    .step-title {
+      font-weight: 600;
+    }
+
+    .step-content {
+      padding: 24px;
+    }
+
+    .step-content pre {
+      background: #1a1a1a;
+      border: 2px solid var(--black);
+      padding: 16px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 14px;
+      color: #e0e0e0;
+      overflow-x: auto;
+      border-radius: 8px;
+    }
+
+    /* Comparison Section */
+    .comparison {
+      padding: 80px 0;
+      background: var(--yellow);
+      border-top: 3px solid var(--black);
+      border-bottom: 3px solid var(--black);
+    }
+
+    .comparison-table {
+      background: var(--white);
+      border: 3px solid var(--black);
+      box-shadow: var(--shadow-lg);
+      overflow: hidden;
+    }
+
+    .comparison-table table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+
+    .comparison-table th,
+    .comparison-table td {
+      padding: 16px 24px;
+      text-align: left;
+      border-bottom: 2px solid var(--black);
+    }
+
+    .comparison-table th {
+      background: var(--black);
+      color: var(--white);
+      font-weight: 600;
+    }
+
+    .comparison-table tr:last-child td {
+      border-bottom: none;
+    }
+
+    .comparison-table tr:nth-child(even) {
+      background: #f5f5f0;
+    }
+
+    .check { color: #22c55e; font-size: 20px; }
+    .cross { color: #ef4444; font-size: 20px; }
+
+    /* CTA Section */
+    .cta {
+      padding: 80px 0;
+      text-align: center;
+    }
+
+    .cta-box {
+      background: var(--pink);
+      border: 3px solid var(--black);
+      padding: 60px;
+      box-shadow: var(--shadow-lg);
+    }
+
+    .cta h2 {
+      font-size: 36px;
+      margin-bottom: 16px;
+    }
+
+    .cta p {
+      font-size: 18px;
+      margin-bottom: 32px;
+      max-width: 500px;
+      margin-left: auto;
+      margin-right: auto;
+    }
+
+    /* Footer */
+    footer {
+      background: var(--black);
+      color: var(--white);
+      padding: 40px 0;
+      border-top: 3px solid var(--black);
+    }
+
+    footer .container {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    footer a {
+      color: var(--yellow);
+    }
+
+    .footer-links {
+      display: flex;
+      gap: 24px;
+      list-style: none;
+    }
+
+    .footer-links a {
+      color: var(--white);
+      text-decoration: none;
+    }
+
+    .footer-links a:hover {
+      color: var(--yellow);
+    }
+
+    /* Responsive */
+    @media (max-width: 768px) {
+      .hero-content {
+        grid-template-columns: 1fr;
+      }
+
+      .hero h1 {
+        font-size: 36px;
+      }
+
+      .features-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .quickstart-steps {
+        grid-template-columns: 1fr;
+      }
+
+      .nav-links {
+        display: none;
+      }
+
+      footer .container {
+        flex-direction: column;
+        gap: 20px;
+        text-align: center;
+      }
+    }
+  </style>
+</head>
+<body>
+  <nav>
+    <div class="container">
+      <a href="/" class="logo">
+        <div class="logo-icon">O</div>
+        OTA Update
+      </a>
+      <ul class="nav-links">
+        <li><a href="#features">Features</a></li>
+        <li><a href="#quickstart">Quick Start</a></li>
+        <li><a href="https://github.com/vanikya/ota-update">GitHub</a></li>
+        <li><a href="https://www.npmjs.com/package/@vanikya/ota-react-native">npm</a></li>
+      </ul>
+    </div>
+  </nav>
+
+  <section class="hero">
+    <div class="container">
+      <div class="hero-content">
+        <div class="hero-text">
+          <div class="hero-badge">Open Source</div>
+          <h1>Self-hosted <span>OTA Updates</span> for React Native</h1>
+          <p>Deploy JavaScript updates instantly without app store reviews. A powerful, self-hosted alternative to CodePush and EAS Updates.</p>
+          <div class="hero-buttons">
+            <a href="#quickstart" class="btn btn-primary">Get Started</a>
+            <a href="https://github.com/vanikya/ota-update" class="btn btn-secondary">View on GitHub</a>
+          </div>
+        </div>
+        <div class="hero-visual">
+          <div class="code-window">
+            <div class="code-header">
+              <span class="code-dot red"></span>
+              <span class="code-dot yellow"></span>
+              <span class="code-dot green"></span>
+            </div>
+            <div class="code-content">
+              <span class="comment"># Push an update in seconds</span><br>
+              $ ota release --app my-app --channel production<br><br>
+              <span class="function">Creating bundle...</span><br>
+              <span class="function">Uploading to server...</span><br>
+              <span class="function">Release v1.2.3 published!</span><br><br>
+              <span class="keyword">All 50,000 users will receive</span><br>
+              <span class="keyword">the update on next app open.</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="features" id="features">
+    <div class="container">
+      <div class="section-header">
+        <h2>Why OTA Update?</h2>
+        <p>Everything you need for seamless over-the-air updates, with full control over your infrastructure.</p>
+      </div>
+      <div class="features-grid">
+        <div class="feature-card">
+          <div class="feature-icon">&#9729;</div>
+          <h3>Self-Hosted</h3>
+          <p>Run on your own Cloudflare Workers. No vendor lock-in, no usage limits, complete data ownership.</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon">&#9889;</div>
+          <h3>Instant Updates</h3>
+          <p>Push updates in seconds. Users get changes on their next app open - no app store review needed.</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon">&#128274;</div>
+          <h3>Secure by Default</h3>
+          <p>Ed25519 signature verification ensures bundles are authentic. SHA-256 hashes verify integrity.</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon">&#128202;</div>
+          <h3>Rollout Control</h3>
+          <p>Gradual rollouts, instant rollbacks, and multiple channels for staging, beta, and production.</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon">&#128241;</div>
+          <h3>Expo + React Native</h3>
+          <p>Works with both Expo (EAS Build) and bare React Native apps with native modules included.</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon">&#128200;</div>
+          <h3>Analytics Built-in</h3>
+          <p>Track update adoption, success rates, and failures. Know exactly how your releases perform.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="architecture">
+    <div class="container">
+      <div class="section-header">
+        <h2>Architecture</h2>
+        <p>Built on Cloudflare's global edge network for maximum performance and reliability.</p>
+      </div>
+      <div class="arch-diagram">
+        <pre>
+     React Native App                    Cloudflare Workers
+    ┌──────────────────┐              ┌──────────────────────────────────┐
+    │                  │   Check      │                                  │
+    │  @vanikya/       │─────────────▶│  /api/check-update               │
+    │  ota-react-native│              │  /api/download/:bundleId         │
+    │                  │◀─────────────│  /api/report-status              │
+    └──────────────────┘   Bundle     │                                  │
+                                      │  ┌──────────┐ ┌────────┐ ┌─────┐ │
+         CLI Tool                     │  │    D1    │ │   KV   │ │ R2  │ │
+    ┌──────────────────┐              │  │ metadata │ │ cache  │ │bundles│
+    │                  │   Deploy     │  └──────────┘ └────────┘ └─────┘ │
+    │  @vanikya/       │─────────────▶│                                  │
+    │  ota-cli         │              │  /api/apps                       │
+    │                  │              │  /api/releases                   │
+    └──────────────────┘              │  /api/channels                   │
+                                      └──────────────────────────────────┘
+        </pre>
+      </div>
+    </div>
+  </section>
+
+  <section class="quickstart" id="quickstart">
+    <div class="container">
+      <div class="section-header">
+        <h2>Quick Start</h2>
+        <p>Get up and running in minutes with these simple steps.</p>
+      </div>
+      <div class="quickstart-steps">
+        <div class="step">
+          <div class="step-header">
+            <div class="step-number">1</div>
+            <div class="step-title">Install the SDK</div>
+          </div>
+          <div class="step-content">
+            <pre>npm install @vanikya/ota-react-native
+
+# For Expo apps
+npx expo install expo-file-system expo-crypto</pre>
+          </div>
+        </div>
+        <div class="step">
+          <div class="step-header">
+            <div class="step-number">2</div>
+            <div class="step-title">Add to your app</div>
+          </div>
+          <div class="step-content">
+            <pre>import { OTAProvider } from '@vanikya/ota-react-native';
+
+&lt;OTAProvider config={{
+  serverUrl: 'https://your-server.workers.dev',
+  appSlug: 'my-app',
+  appVersion: '1.0.0'
+}}&gt;
+  &lt;App /&gt;
+&lt;/OTAProvider&gt;</pre>
+          </div>
+        </div>
+        <div class="step">
+          <div class="step-header">
+            <div class="step-number">3</div>
+            <div class="step-title">Install the CLI</div>
+          </div>
+          <div class="step-content">
+            <pre>npm install -g @vanikya/ota-cli
+
+# Login to your server
+ota login --server https://your-server.workers.dev</pre>
+          </div>
+        </div>
+        <div class="step">
+          <div class="step-header">
+            <div class="step-number">4</div>
+            <div class="step-title">Push an update</div>
+          </div>
+          <div class="step-content">
+            <pre># Create a release
+ota release --app my-app \
+  --channel production \
+  -v 1.0.1
+
+# Users get the update instantly!</pre>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="comparison">
+    <div class="container">
+      <div class="section-header">
+        <h2>Compare Solutions</h2>
+        <p>See how OTA Update stacks up against other solutions.</p>
+      </div>
+      <div class="comparison-table">
+        <table>
+          <thead>
+            <tr>
+              <th>Feature</th>
+              <th>OTA Update</th>
+              <th>EAS Updates</th>
+              <th>CodePush</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Self-hosted</td>
+              <td><span class="check">&#10003;</span></td>
+              <td><span class="cross">&#10005;</span></td>
+              <td><span class="cross">&#10005;</span></td>
+            </tr>
+            <tr>
+              <td>Free tier</td>
+              <td><span class="check">&#10003;</span> Unlimited</td>
+              <td>Limited</td>
+              <td>Limited</td>
+            </tr>
+            <tr>
+              <td>Open source</td>
+              <td><span class="check">&#10003;</span></td>
+              <td><span class="cross">&#10005;</span></td>
+              <td><span class="cross">&#10005;</span></td>
+            </tr>
+            <tr>
+              <td>Expo support</td>
+              <td><span class="check">&#10003;</span></td>
+              <td><span class="check">&#10003;</span></td>
+              <td><span class="cross">&#10005;</span></td>
+            </tr>
+            <tr>
+              <td>Bare RN support</td>
+              <td><span class="check">&#10003;</span></td>
+              <td>Limited</td>
+              <td><span class="check">&#10003;</span></td>
+            </tr>
+            <tr>
+              <td>Signature verification</td>
+              <td><span class="check">&#10003;</span></td>
+              <td><span class="check">&#10003;</span></td>
+              <td><span class="check">&#10003;</span></td>
+            </tr>
+            <tr>
+              <td>Gradual rollouts</td>
+              <td><span class="check">&#10003;</span></td>
+              <td><span class="check">&#10003;</span></td>
+              <td><span class="check">&#10003;</span></td>
+            </tr>
+            <tr>
+              <td>Data ownership</td>
+              <td><span class="check">&#10003;</span> Full</td>
+              <td><span class="cross">&#10005;</span></td>
+              <td><span class="cross">&#10005;</span></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <section class="cta">
+    <div class="container">
+      <div class="cta-box">
+        <h2>Ready to ship faster?</h2>
+        <p>Start deploying updates in minutes, not days. Your users will thank you.</p>
+        <div class="hero-buttons" style="justify-content: center;">
+          <a href="https://github.com/vanikya/ota-update" class="btn btn-primary">Get Started Free</a>
+          <a href="https://www.npmjs.com/package/@vanikya/ota-react-native" class="btn btn-secondary">View on npm</a>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <footer>
+    <div class="container">
+      <div>
+        &copy; 2025 OTA Update. Open source under <a href="https://github.com/vanikya/ota-update/blob/main/LICENSE">MIT License</a>.
+      </div>
+      <ul class="footer-links">
+        <li><a href="https://github.com/vanikya/ota-update">GitHub</a></li>
+        <li><a href="https://www.npmjs.com/package/@vanikya/ota-react-native">npm</a></li>
+        <li><a href="https://github.com/vanikya/ota-update/issues">Issues</a></li>
+      </ul>
+    </div>
+  </footer>
+</body>
+</html>
