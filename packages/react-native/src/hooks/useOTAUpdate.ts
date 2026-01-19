@@ -1,10 +1,8 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
-import { AppState, AppStateStatus, NativeModules, Platform } from 'react-native';
+import { AppState, AppStateStatus, Platform } from 'react-native';
 import { OTAApiClient, ReleaseInfo, getDeviceInfo } from '../utils/api';
 import { UpdateStorage, StoredUpdate } from '../utils/storage';
 import { verifyBundle, VerificationResult } from '../utils/verification';
-
-const OTAUpdateNative = NativeModules.OTAUpdate;
 
 export interface OTAUpdateConfig {
   serverUrl: string;
@@ -206,6 +204,18 @@ export function useOTAUpdate(config: OTAUpdateConfig): UseOTAUpdateResult {
         downloadedAt: Date.now(),
       });
 
+      // Register the bundle path with native module (for next app restart)
+      // This saves to SharedPreferences (Android) / UserDefaults (iOS)
+      const registered = await storage.current.registerBundleWithNative(bundlePath, false);
+
+      if (__DEV__) {
+        if (registered) {
+          console.log('[OTAUpdate] Bundle registered with native module. Will apply on app restart.');
+        } else {
+          console.log('[OTAUpdate] Could not register with native module. If using Expo Go, this is expected.');
+        }
+      }
+
       setStatus('ready');
     } catch (err) {
       const error = err instanceof Error ? err : new Error(String(err));
@@ -250,14 +260,19 @@ export function useOTAUpdate(config: OTAUpdateConfig): UseOTAUpdateResult {
         deviceInfo: getDeviceInfo(),
       });
 
-      // Apply bundle using native module
-      if (OTAUpdateNative?.applyBundle) {
-        await OTAUpdateNative.applyBundle(metadata.bundlePath, restartApp);
-      } else if (restartApp) {
-        // If no native module, we need to restart manually
-        // The bundle will be loaded on next app start
+      // Register bundle path with native module and optionally restart
+      // This ensures the path is saved to SharedPreferences/UserDefaults
+      const registered = await storage.current.registerBundleWithNative(metadata.bundlePath, restartApp);
+
+      if (!registered && restartApp) {
+        // Native module not available
         if (__DEV__) {
-          console.log('[OTAUpdate] Update ready. Restart the app to apply.');
+          console.log('[OTAUpdate] Update ready. Close and reopen the app to apply the update.');
+          console.log('[OTAUpdate] Note: For Expo Go, OTA updates require a native build (EAS Build).');
+        }
+      } else if (registered && !restartApp) {
+        if (__DEV__) {
+          console.log('[OTAUpdate] Update registered. Will apply on next app restart.');
         }
       }
 
@@ -300,6 +315,9 @@ export function useOTAUpdate(config: OTAUpdateConfig): UseOTAUpdateResult {
       await storage.current.deleteBundle(metadata.releaseId);
       await storage.current.clearMetadata();
     }
+
+    // Also clear from native storage (SharedPreferences/UserDefaults)
+    await storage.current.clearNativePendingBundle();
 
     setUpdateInfo(null);
     releaseRef.current = null;

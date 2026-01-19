@@ -12,13 +12,35 @@ Works with both **Expo** and **bare React Native** apps.
 npm install @vanikya/ota-react-native
 ```
 
-### For Expo apps
+### For Expo apps (EAS Build)
 
-Install Expo dependencies:
+1. Install Expo dependencies:
 
 ```bash
 npx expo install expo-file-system expo-crypto
 ```
+
+2. Add the config plugin to your `app.json` or `app.config.js`:
+
+```json
+{
+  "expo": {
+    "plugins": [
+      "@vanikya/ota-react-native"
+    ]
+  }
+}
+```
+
+3. Rebuild your app with EAS Build:
+
+```bash
+eas build --platform android
+# or
+eas build --platform ios
+```
+
+> **Important**: OTA updates require a native build with EAS Build. They will NOT work in Expo Go because the plugin modifies native code to load custom bundles.
 
 ### For bare React Native apps
 
@@ -34,6 +56,7 @@ cd ios && pod install
 
 ```tsx
 import { OTAProvider } from '@vanikya/ota-react-native';
+import Constants from 'expo-constants';
 
 export default function App() {
   return (
@@ -42,6 +65,7 @@ export default function App() {
         serverUrl: 'https://your-server.workers.dev',
         appSlug: 'my-app',
         channel: 'production',
+        appVersion: Constants.expoConfig?.version || '1.0.0',
         // Optional: public key for signature verification
         publicKey: 'your-public-key-hex',
       }}
@@ -99,10 +123,11 @@ function UpdateChecker() {
 |------|------|----------|-------------|
 | `config.serverUrl` | string | Yes | Your OTA server URL |
 | `config.appSlug` | string | Yes | Your app's slug |
+| `config.appVersion` | string | Yes | Your native app version (e.g., "1.0.0") |
 | `config.channel` | string | No | Release channel (default: 'production') |
 | `config.publicKey` | string | No | Ed25519 public key for signature verification |
 | `config.checkOnMount` | boolean | No | Auto-check for updates on mount |
-| `config.applyOnDownload` | boolean | No | Auto-apply after download |
+| `config.checkOnForeground` | boolean | No | Auto-check when app comes to foreground |
 
 ### useOTAUpdate Hook
 
@@ -219,6 +244,25 @@ This SDK requires a backend server. See the [main repository](https://github.com
 4. **Apply**: App restarts with new bundle
 
 Updates are stored locally, so the app works offline after the first download.
+
+### How Expo Plugin Works
+
+For Expo apps built with EAS Build, the config plugin modifies the native code to enable OTA updates:
+
+**Android** (`MainApplication.kt`):
+- Overrides `getJSBundleFile()` to check SharedPreferences for a downloaded bundle path
+- If a valid bundle exists, it loads that instead of the built-in bundle
+
+**iOS** (`AppDelegate.swift`):
+- Modifies `bundleURL()` to check UserDefaults for a downloaded bundle path
+- If a valid bundle exists, it returns that URL instead of the built-in bundle
+
+When you call `applyUpdate()` or the download completes:
+1. The bundle is saved to the device's document directory
+2. The path is registered with native storage (SharedPreferences/UserDefaults)
+3. On the next app restart, the native code loads the OTA bundle
+
+> **Note**: OTA updates only work on EAS Build apps, not Expo Go, because Expo Go doesn't include the native module.
 
 ## License
 

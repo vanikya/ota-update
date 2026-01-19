@@ -19,6 +19,14 @@ export interface StorageAdapter {
   makeDirectory(path: string): Promise<void>;
 }
 
+// Helper to normalize file paths (remove file:// prefix)
+function normalizePath(path: string): string {
+  if (path.startsWith('file://')) {
+    return path.slice(7);
+  }
+  return path;
+}
+
 // Try to use Expo FileSystem if available
 let ExpoFileSystem: any = null;
 try {
@@ -171,10 +179,15 @@ export function getStorageAdapter(): StorageAdapter {
 export class UpdateStorage {
   private storage: StorageAdapter;
   private baseDir: string;
+  private baseDirNormalized: string;
+  private isExpo: boolean;
 
   constructor() {
     this.storage = getStorageAdapter();
+    this.isExpo = !!ExpoFileSystem;
     this.baseDir = `${this.storage.getDocumentDirectory()}ota-update/`;
+    // Keep a normalized version for native module calls
+    this.baseDirNormalized = normalizePath(this.baseDir);
   }
 
   private async ensureDirectory(): Promise<void> {
@@ -184,19 +197,26 @@ export class UpdateStorage {
     }
   }
 
+  // Get normalized path (without file:// prefix) for native module compatibility
+  getNormalizedPath(path: string): string {
+    return normalizePath(path);
+  }
+
   async saveBundle(releaseId: string, data: ArrayBuffer): Promise<string> {
     await this.ensureDirectory();
 
     const bundlePath = `${this.baseDir}${releaseId}.bundle`;
     await this.storage.writeFile(bundlePath, data);
 
-    return bundlePath;
+    // Return normalized path for native module compatibility
+    return normalizePath(bundlePath);
   }
 
   async getBundlePath(releaseId: string): Promise<string | null> {
     const bundlePath = `${this.baseDir}${releaseId}.bundle`;
     const exists = await this.storage.exists(bundlePath);
-    return exists ? bundlePath : null;
+    // Return normalized path for native module compatibility
+    return exists ? normalizePath(bundlePath) : null;
   }
 
   async readBundle(releaseId: string): Promise<ArrayBuffer | null> {
@@ -245,5 +265,53 @@ export class UpdateStorage {
   async cleanOldBundles(keepReleaseId: string): Promise<void> {
     // For now, we just keep one bundle at a time
     // In a more advanced implementation, we might keep a few for rollback
+  }
+
+  /**
+   * Register the bundle path with the native module.
+   * This saves the path to SharedPreferences (Android) or UserDefaults (iOS)
+   * so the app can load the OTA bundle on restart.
+   *
+   * @param bundlePath The normalized path to the bundle file
+   * @param restart Whether to restart the app immediately
+   * @returns true if successfully registered with native module, false otherwise
+   */
+  async registerBundleWithNative(bundlePath: string, restart: boolean = false): Promise<boolean> {
+    try {
+      if (OTAUpdateNative?.applyBundle) {
+        // Ensure path is normalized before passing to native module
+        const normalizedPath = normalizePath(bundlePath);
+        await OTAUpdateNative.applyBundle(normalizedPath, restart);
+        return true;
+      } else {
+        // Native module not available - this is expected for Expo Go
+        // but should work for EAS Build apps
+        if (__DEV__) {
+          console.log('[OTAUpdate] Native module not available. Update will apply on next build with native modules.');
+        }
+        return false;
+      }
+    } catch (error) {
+      if (__DEV__) {
+        console.error('[OTAUpdate] Failed to register bundle with native module:', error);
+      }
+      return false;
+    }
+  }
+
+  /**
+   * Clear the pending bundle from native storage.
+   * This removes the bundle path from SharedPreferences (Android) or UserDefaults (iOS).
+   */
+  async clearNativePendingBundle(): Promise<void> {
+    try {
+      if (OTAUpdateNative?.clearPendingBundle) {
+        await OTAUpdateNative.clearPendingBundle();
+      }
+    } catch (error) {
+      if (__DEV__) {
+        console.error('[OTAUpdate] Failed to clear pending bundle:', error);
+      }
+    }
   }
 }
