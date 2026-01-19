@@ -2,6 +2,8 @@
 
 > **Beta Notice**: This package is currently in beta. Testing is in progress and APIs may change. Use in production at your own discretion. We welcome feedback and bug reports via [GitHub Issues](https://github.com/vanikya/ota-update/issues).
 
+**[Documentation](https://vanikya.github.io/ota-update/)** | **[GitHub](https://github.com/vanikya/ota-update)** | **[npm](https://www.npmjs.com/package/@vanikya/ota-react-native)**
+
 React Native SDK for OTA (Over-The-Air) updates. A self-hosted alternative to CodePush and EAS Updates.
 
 Works with both **Expo** and **bare React Native** apps.
@@ -134,18 +136,22 @@ function UpdateChecker() {
 ```tsx
 const {
   // State
+  status,              // UpdateStatus - current status
   isChecking,          // boolean - checking for updates
   isDownloading,       // boolean - downloading update
   isApplying,          // boolean - applying update
-  downloadProgress,    // number (0-100) - download progress
-  availableUpdate,     // UpdateInfo | null - available update info
+  downloadProgress,    // DownloadProgress | null - download progress
+  updateInfo,          // UpdateInfo | null - available update info
   error,               // Error | null - last error
+  isDismissed,         // boolean - whether user dismissed the update
 
   // Actions
   checkForUpdate,      // () => Promise<UpdateInfo | null>
   downloadUpdate,      // () => Promise<void>
-  applyUpdate,         // () => Promise<void>
-  downloadAndApply,    // () => Promise<void>
+  applyUpdate,         // (restartApp?: boolean) => Promise<void>
+  clearPendingUpdate,  // () => Promise<void>
+  dismissUpdate,       // () => void - dismiss update notification
+  resetDismiss,        // () => void - reset dismiss state
 } = useOTAUpdate();
 ```
 
@@ -198,16 +204,49 @@ Handle mandatory updates that can't be skipped:
 
 ```tsx
 function App() {
-  const { availableUpdate, downloadAndApply } = useOTAUpdate();
+  const { updateInfo, downloadAndApply } = useOTAUpdate();
 
   useEffect(() => {
-    if (availableUpdate?.isMandatory) {
+    if (updateInfo?.isMandatory) {
       // Force update for mandatory releases
       downloadAndApply();
     }
-  }, [availableUpdate]);
+  }, [updateInfo]);
 
   return <YourApp />;
+}
+```
+
+## Dismissable Update Banner
+
+Allow users to dismiss optional updates:
+
+```tsx
+function UpdateBanner() {
+  const { updateInfo, isDismissed, dismissUpdate, downloadAndApply, isDownloading } = useOTAUpdate();
+
+  // Don't show if no update or user dismissed
+  if (!updateInfo || isDismissed) {
+    return null;
+  }
+
+  // Force mandatory updates (can't dismiss)
+  if (updateInfo.isMandatory) {
+    return (
+      <View>
+        <Text>Required update: v{updateInfo.version}</Text>
+        <Button title="Update Now" onPress={downloadAndApply} />
+      </View>
+    );
+  }
+
+  return (
+    <View>
+      <Text>Update available: v{updateInfo.version}</Text>
+      <Button title="Update" onPress={downloadAndApply} disabled={isDownloading} />
+      <Button title="Later" onPress={dismissUpdate} />
+    </View>
+  );
 }
 ```
 
@@ -263,6 +302,42 @@ When you call `applyUpdate()` or the download completes:
 3. On the next app restart, the native code loads the OTA bundle
 
 > **Note**: OTA updates only work on EAS Build apps, not Expo Go, because Expo Go doesn't include the native module.
+
+## Version Targeting
+
+Target specific native app versions when publishing updates using the CLI:
+
+```bash
+# Only send updates to app versions >= 2.0.0
+ota release --app my-app --min-app-version 2.0.0
+
+# Only send updates to app versions between 2.0.0 and 2.5.0
+ota release --app my-app --min-app-version 2.0.0 --max-app-version 2.5.0
+```
+
+This is useful when:
+- You have breaking changes that only work with newer native builds
+- You want to phase out support for older app versions
+- Different native versions have different API requirements
+
+## Recovering from Corrupted Updates
+
+If an OTA update becomes corrupted (causing app crashes), you can clear it:
+
+```tsx
+import { UpdateStorage } from '@vanikya/ota-react-native';
+
+// On app startup, check for and clear corrupted bundles
+async function recoverFromCorruptedUpdate() {
+  const storage = new UpdateStorage();
+  const wasCorrupted = await storage.clearCorruptedBundle();
+  if (wasCorrupted) {
+    console.log('Cleared corrupted OTA bundle, app will use built-in bundle');
+  }
+}
+```
+
+The SDK now validates downloaded bundles to prevent HTML error pages or corrupted files from being saved as bundles.
 
 ## License
 

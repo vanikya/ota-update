@@ -27,16 +27,33 @@ function hexToBytes(hex: string): Uint8Array {
   return bytes;
 }
 
+// Convert ArrayBuffer to base64 in chunks to avoid btoa() size limits
+// btoa() can fail for strings > 2MB on some JS engines
+// Chunk size must be multiple of 3 to avoid base64 padding issues between chunks
+function arrayBufferToBase64(buffer: ArrayBuffer): string {
+  const bytes = new Uint8Array(buffer);
+  // 32766 is divisible by 3, so each chunk produces valid base64 without padding (except last)
+  const chunkSize = 32766;
+  const chunks: string[] = [];
+
+  for (let i = 0; i < bytes.length; i += chunkSize) {
+    const chunk = bytes.subarray(i, Math.min(i + chunkSize, bytes.length));
+    let binary = '';
+    for (let j = 0; j < chunk.length; j++) {
+      binary += String.fromCharCode(chunk[j]);
+    }
+    chunks.push(btoa(binary));
+  }
+
+  return chunks.join('');
+}
+
 // Calculate SHA-256 hash of data
 export async function calculateHash(data: ArrayBuffer): Promise<string> {
   // Use native module first (most reliable for binary data)
   if (OTAUpdateNative?.calculateSHA256) {
-    const bytes = new Uint8Array(data);
-    let binary = '';
-    for (let i = 0; i < bytes.length; i++) {
-      binary += String.fromCharCode(bytes[i]);
-    }
-    const base64 = btoa(binary);
+    // Use chunked base64 encoding for large bundles
+    const base64 = arrayBufferToBase64(data);
     const hash = await OTAUpdateNative.calculateSHA256(base64);
     return 'sha256:' + hash;
   }
@@ -78,12 +95,8 @@ export async function verifySignature(
   // We rely on native modules or skip if not available
 
   if (OTAUpdateNative?.verifySignature) {
-    const bytes = new Uint8Array(data);
-    let binary = '';
-    for (let i = 0; i < bytes.length; i++) {
-      binary += String.fromCharCode(bytes[i]);
-    }
-    const base64 = btoa(binary);
+    // Use chunked base64 encoding for large bundles
+    const base64 = arrayBufferToBase64(data);
     return OTAUpdateNative.verifySignature(base64, signatureHex, publicKeyHex);
   }
 

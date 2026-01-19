@@ -27,6 +27,37 @@ function normalizePath(path: string): string {
   return path;
 }
 
+// Convert ArrayBuffer to base64 in chunks to avoid btoa() size limits
+// btoa() can fail for strings > 2MB on some JS engines
+// Chunk size must be multiple of 3 to avoid base64 padding issues between chunks
+function arrayBufferToBase64(buffer: ArrayBuffer): string {
+  const bytes = new Uint8Array(buffer);
+  // 32766 is divisible by 3, so each chunk produces valid base64 without padding (except last)
+  const chunkSize = 32766;
+  const chunks: string[] = [];
+
+  for (let i = 0; i < bytes.length; i += chunkSize) {
+    const chunk = bytes.subarray(i, Math.min(i + chunkSize, bytes.length));
+    let binary = '';
+    for (let j = 0; j < chunk.length; j++) {
+      binary += String.fromCharCode(chunk[j]);
+    }
+    chunks.push(btoa(binary));
+  }
+
+  return chunks.join('');
+}
+
+// Convert base64 to ArrayBuffer
+function base64ToArrayBuffer(base64: string): ArrayBuffer {
+  const binary = atob(base64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) {
+    bytes[i] = binary.charCodeAt(i);
+  }
+  return bytes.buffer;
+}
+
 // Try to use Expo FileSystem if available
 // Use legacy API to avoid deprecation warnings in expo-file-system v54+
 let ExpoFileSystem: any = null;
@@ -53,13 +84,8 @@ class ExpoStorageAdapter implements StorageAdapter {
 
   async writeFile(path: string, data: string | ArrayBuffer): Promise<void> {
     if (data instanceof ArrayBuffer) {
-      // Convert ArrayBuffer to base64
-      const bytes = new Uint8Array(data);
-      let binary = '';
-      for (let i = 0; i < bytes.length; i++) {
-        binary += String.fromCharCode(bytes[i]);
-      }
-      const base64 = btoa(binary);
+      // Convert ArrayBuffer to base64 using chunked approach for large bundles
+      const base64 = arrayBufferToBase64(data);
       await ExpoFileSystem.writeAsStringAsync(path, base64, {
         encoding: ExpoFileSystem.EncodingType.Base64,
       });
@@ -113,12 +139,8 @@ class NativeStorageAdapter implements StorageAdapter {
     }
 
     if (data instanceof ArrayBuffer) {
-      const bytes = new Uint8Array(data);
-      let binary = '';
-      for (let i = 0; i < bytes.length; i++) {
-        binary += String.fromCharCode(bytes[i]);
-      }
-      const base64 = btoa(binary);
+      // Convert ArrayBuffer to base64 using chunked approach for large bundles
+      const base64 = arrayBufferToBase64(data);
       await OTAUpdateNative.writeFileBase64(path, base64);
     } else {
       await OTAUpdateNative.writeFile(path, data);
@@ -279,6 +301,118 @@ export class UpdateStorage {
   async cleanOldBundles(keepReleaseId: string): Promise<void> {
     // For now, we just keep one bundle at a time
     // In a more advanced implementation, we might keep a few for rollback
+  }
+
+  /**
+   * Validate that a stored bundle is a valid JavaScript file.
+   * This helps detect corrupted downloads (e.g., HTML error pages saved as bundles).
+   *
+   * @param releaseId The release ID to validate
+   * @returns true if bundle is valid JavaScript, false otherwise
+   */
+  async validateBundle(releaseId: string): Promise<boolean> {
+    try {
+      const bundleData = await this.readBundle(releaseId);
+      if (!bundleData) {
+        return false;
+      }
+
+      // Check minimum size
+      if (bundleData.byteLength < 10) {
+        return false;
+      }
+
+      // Read first 1000 bytes to check content
+      const bytes = new Uint8Array(bundleData, 0, Math.min(1000, bundleData.byteLength));
+      let preview = '';
+      for (let i = 0; i < bytes.length; i++) {
+        preview += String.fromCharCode(bytes[i]);
+      }
+      const trimmed = preview.trim();
+
+      // Check for HTML indicators (common error page patterns)
+      if (
+        trimmed.startsWith('<!DOCTYPE') ||
+        trimmed.startsWith('<!doctype') ||
+        trimmed.startsWith('<html') ||
+        trimmed.startsWith('<HTML') ||
+        trimmed.includes('<head>') ||
+        trimmed.includes('<body>')
+      ) {
+        return false;
+      }
+
+      // Accept if it looks like JavaScript
+      const jsIndicators = [
+        /^var\s/,
+        /^let\s/,
+        /^const\s/,
+        /^\(function/,
+        /^!function/,
+        /^["']use strict["']/,
+        /^Object\.defineProperty/,
+        /^__d\(/,
+        /^\/[/*]/,
+        /^"use strict"/,
+        /^__BUNDLE_START_TIME__/,
+      ];
+
+      for (const pattern of jsIndicators) {
+        if (pattern.test(trimmed)) {
+          return true;
+        }
+      }
+
+      // Also check for common JS tokens in minified bundles
+      if (
+        trimmed.includes('function') ||
+        trimmed.includes('exports') ||
+        trimmed.includes('require(') ||
+        trimmed.includes('__d(')
+      ) {
+        return true;
+      }
+
+      return false;
+    } catch {
+      return false;
+    }
+  }
+
+  /**
+   * Clear corrupted bundle if detected.
+   * Call this on app startup to recover from bad OTA updates.
+   *
+   * @returns true if a corrupted bundle was cleared, false otherwise
+   */
+  async clearCorruptedBundle(): Promise<boolean> {
+    try {
+      const metadata = await this.getMetadata();
+      if (!metadata) {
+        return false;
+      }
+
+      const isValid = await this.validateBundle(metadata.releaseId);
+      if (!isValid) {
+        if (__DEV__) {
+          console.warn('[OTAUpdate] Detected corrupted bundle, clearing...');
+        }
+
+        // Clear the corrupted bundle
+        await this.deleteBundle(metadata.releaseId);
+        await this.clearMetadata();
+        await this.clearNativePendingBundle();
+
+        return true;
+      }
+
+      return false;
+    } catch (error) {
+      if (__DEV__) {
+        console.error('[OTAUpdate] Error checking bundle:', error);
+      }
+      return false;
+    }
   }
 
   /**

@@ -64,19 +64,12 @@
       color: var(--black);
       display: flex;
       align-items: center;
-      gap: 8px;
+      gap: 10px;
     }
 
     .logo-icon {
-      width: 32px;
-      height: 32px;
-      background: var(--black);
-      border-radius: 8px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      color: var(--yellow);
-      font-size: 18px;
+      height: 36px;
+      width: auto;
     }
 
     .nav-links {
@@ -383,6 +376,107 @@
       border-radius: 8px;
     }
 
+    /* Expo Plugin Section */
+    .expo-plugin {
+      padding: 80px 0;
+      background: var(--green);
+      border-top: 3px solid var(--black);
+      border-bottom: 3px solid var(--black);
+    }
+
+    /* Testing Section */
+    .testing {
+      padding: 80px 0;
+      background: var(--purple);
+      border-top: 3px solid var(--black);
+      border-bottom: 3px solid var(--black);
+    }
+
+    .testing-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 32px;
+      margin-top: 40px;
+    }
+
+    .testing-card {
+      background: var(--white);
+      border: 3px solid var(--black);
+      box-shadow: var(--shadow);
+    }
+
+    .testing-card-header {
+      background: var(--black);
+      color: var(--white);
+      padding: 16px 24px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .testing-card-header h3 {
+      font-size: 18px;
+      font-weight: 700;
+    }
+
+    .platform-icon {
+      font-size: 24px;
+    }
+
+    .testing-card-content {
+      padding: 24px;
+    }
+
+    .testing-card-content h4 {
+      font-size: 16px;
+      font-weight: 700;
+      margin-bottom: 12px;
+      padding-bottom: 8px;
+      border-bottom: 2px solid var(--black);
+    }
+
+    .testing-card-content h4:not(:first-child) {
+      margin-top: 24px;
+    }
+
+    .checklist {
+      list-style: none;
+      padding: 0;
+    }
+
+    .checklist li {
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+      padding: 8px 0;
+      border-bottom: 1px dashed #ccc;
+    }
+
+    .checklist li:last-child {
+      border-bottom: none;
+    }
+
+    .checklist-box {
+      width: 20px;
+      height: 20px;
+      border: 2px solid var(--black);
+      border-radius: 4px;
+      flex-shrink: 0;
+      margin-top: 2px;
+    }
+
+    .checklist-text {
+      font-size: 14px;
+    }
+
+    .checklist-text code {
+      background: #f0f0f0;
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 12px;
+    }
+
     /* Comparison Section */
     .comparison {
       padding: 80px 0;
@@ -453,6 +547,32 @@
       margin-right: auto;
     }
 
+    /* Built By Section */
+    .built-by {
+      padding: 40px 0;
+      background: #f5f5f0;
+      border-top: 3px solid var(--black);
+      text-align: center;
+    }
+
+    .built-by-content {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 16px;
+    }
+
+    .built-by-text {
+      font-size: 16px;
+      font-weight: 500;
+      color: #666;
+    }
+
+    .built-by-logo {
+      height: 40px;
+      width: auto;
+    }
+
     /* Footer */
     footer {
       background: var(--black);
@@ -504,6 +624,10 @@
         grid-template-columns: 1fr;
       }
 
+      .testing-grid {
+        grid-template-columns: 1fr;
+      }
+
       .nav-links {
         display: none;
       }
@@ -513,6 +637,10 @@
         gap: 20px;
         text-align: center;
       }
+
+      .built-by-content {
+        flex-direction: column;
+      }
     }
   </style>
 </head>
@@ -520,12 +648,14 @@
   <nav>
     <div class="container">
       <a href="/" class="logo">
-        <div class="logo-icon">O</div>
+        <img src="https://ik.imagekit.io/vanikya/vanikya_only_logo.png?updatedAt=1744132669249" alt="Vanikya" class="logo-icon">
         OTA Update
       </a>
       <ul class="nav-links">
         <li><a href="#features">Features</a></li>
         <li><a href="#quickstart">Quick Start</a></li>
+        <li><a href="#expo-plugin">Expo Plugin</a></li>
+        <li><a href="#testing">Testing</a></li>
         <li><a href="https://github.com/vanikya/ota-update">GitHub</a></li>
         <li><a href="https://www.npmjs.com/package/@vanikya/ota-react-native">npm</a></li>
       </ul>
@@ -702,6 +832,293 @@ ota release --app my-app \
     </div>
   </section>
 
+  <section class="expo-plugin" id="expo-plugin">
+    <div class="container">
+      <div class="section-header">
+        <h2>Expo Plugin</h2>
+        <p>Automatic native code configuration for Expo apps built with EAS Build.</p>
+      </div>
+      <div class="quickstart-steps">
+        <div class="step">
+          <div class="step-header">
+            <div class="step-number">1</div>
+            <div class="step-title">Add Plugin to app.json</div>
+          </div>
+          <div class="step-content">
+            <pre>{
+  "expo": {
+    "plugins": [
+      "@vanikya/ota-react-native"
+    ]
+  }
+}</pre>
+          </div>
+        </div>
+        <div class="step">
+          <div class="step-header">
+            <div class="step-number">2</div>
+            <div class="step-title">Build with EAS</div>
+          </div>
+          <div class="step-content">
+            <pre># Build for Android
+eas build --platform android
+
+# Build for iOS
+eas build --platform ios</pre>
+          </div>
+        </div>
+        <div class="step" style="grid-column: span 2;">
+          <div class="step-header">
+            <div class="step-number">?</div>
+            <div class="step-title">What the Plugin Does</div>
+          </div>
+          <div class="step-content">
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 24px;">
+              <div>
+                <h4 style="margin-bottom: 12px; font-weight: 700;">Android (MainApplication.kt)</h4>
+                <ul style="list-style: disc; padding-left: 20px; font-size: 14px; line-height: 1.8;">
+                  <li>Overrides <code style="background: #f0f0f0; padding: 2px 6px; border-radius: 4px;">getJSBundleFile()</code></li>
+                  <li>Checks SharedPreferences for downloaded bundle path</li>
+                  <li>Loads OTA bundle if exists, otherwise uses built-in bundle</li>
+                </ul>
+              </div>
+              <div>
+                <h4 style="margin-bottom: 12px; font-weight: 700;">iOS (AppDelegate.swift)</h4>
+                <ul style="list-style: disc; padding-left: 20px; font-size: 14px; line-height: 1.8;">
+                  <li>Overrides <code style="background: #f0f0f0; padding: 2px 6px; border-radius: 4px;">bundleURL()</code></li>
+                  <li>Checks UserDefaults for downloaded bundle path</li>
+                  <li>Returns OTA bundle URL if exists, otherwise uses built-in bundle</li>
+                </ul>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div style="margin-top: 40px; background: var(--orange); border: 3px solid var(--black); padding: 24px; box-shadow: var(--shadow);">
+        <h3 style="margin-bottom: 12px;">Important: Expo Go Not Supported</h3>
+        <p style="font-size: 15px;">OTA updates require a native build with <strong>EAS Build</strong>. They will NOT work in Expo Go because the plugin modifies native code that isn't present in Expo Go. After building with EAS, you'll have a standalone app that can receive OTA updates.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="testing" id="testing">
+    <div class="container">
+      <div class="section-header">
+        <h2>Testing Checklist</h2>
+        <p>Verify OTA updates work correctly across all platforms and project types.</p>
+      </div>
+      <div class="testing-grid">
+        <!-- Expo Android -->
+        <div class="testing-card">
+          <div class="testing-card-header">
+            <span class="platform-icon">&#129302;</span>
+            <h3>Expo - Android</h3>
+          </div>
+          <div class="testing-card-content">
+            <h4>Setup</h4>
+            <ul class="checklist">
+              <li>
+                <span class="checklist-box"></span>
+                <span class="checklist-text">Add plugin to <code>app.json</code>: <code>"plugins": ["@vanikya/ota-react-native"]</code></span>
+              </li>
+              <li>
+                <span class="checklist-box"></span>
+                <span class="checklist-text">Install dependencies: <code>expo-file-system</code>, <code>expo-crypto</code></span>
+              </li>
+              <li>
+                <span class="checklist-box"></span>
+                <span class="checklist-text">Build with EAS: <code>eas build --platform android</code></span>
+              </li>
+            </ul>
+            <h4>Functionality</h4>
+            <ul class="checklist">
+              <li>
+                <span class="checklist-box"></span>
+                <span class="checklist-text">Update check triggers on app open</span>
+              </li>
+              <li>
+                <span class="checklist-box"></span>
+                <span class="checklist-text">Update banner/UI displays correctly</span>
+              </li>
+              <li>
+                <span class="checklist-box"></span>
+                <span class="checklist-text">Bundle downloads without errors</span>
+              </li>
+              <li>
+                <span class="checklist-box"></span>
+                <span class="checklist-text">Hash verification passes</span>
+              </li>
+              <li>
+                <span class="checklist-box"></span>
+                <span class="checklist-text">Update applies on app restart</span>
+              </li>
+              <li>
+                <span class="checklist-box"></span>
+                <span class="checklist-text">New content visible after restart</span>
+              </li>
+            </ul>
+          </div>
+        </div>
+
+        <!-- Expo iOS -->
+        <div class="testing-card">
+          <div class="testing-card-header">
+            <span class="platform-icon">&#127822;</span>
+            <h3>Expo - iOS</h3>
+          </div>
+          <div class="testing-card-content">
+            <h4>Setup</h4>
+            <ul class="checklist">
+              <li>
+                <span class="checklist-box"></span>
+                <span class="checklist-text">Add plugin to <code>app.json</code>: <code>"plugins": ["@vanikya/ota-react-native"]</code></span>
+              </li>
+              <li>
+                <span class="checklist-box"></span>
+                <span class="checklist-text">Install dependencies: <code>expo-file-system</code>, <code>expo-crypto</code></span>
+              </li>
+              <li>
+                <span class="checklist-box"></span>
+                <span class="checklist-text">Build with EAS: <code>eas build --platform ios</code></span>
+              </li>
+            </ul>
+            <h4>Functionality</h4>
+            <ul class="checklist">
+              <li>
+                <span class="checklist-box"></span>
+                <span class="checklist-text">Update check triggers on app open</span>
+              </li>
+              <li>
+                <span class="checklist-box"></span>
+                <span class="checklist-text">Update banner/UI displays correctly</span>
+              </li>
+              <li>
+                <span class="checklist-box"></span>
+                <span class="checklist-text">Bundle downloads without errors</span>
+              </li>
+              <li>
+                <span class="checklist-box"></span>
+                <span class="checklist-text">Hash verification passes</span>
+              </li>
+              <li>
+                <span class="checklist-box"></span>
+                <span class="checklist-text">Update applies on app restart</span>
+              </li>
+              <li>
+                <span class="checklist-box"></span>
+                <span class="checklist-text">New content visible after restart</span>
+              </li>
+            </ul>
+          </div>
+        </div>
+
+        <!-- Bare RN Android -->
+        <div class="testing-card">
+          <div class="testing-card-header">
+            <span class="platform-icon">&#129302;</span>
+            <h3>Bare React Native - Android</h3>
+          </div>
+          <div class="testing-card-content">
+            <h4>Setup</h4>
+            <ul class="checklist">
+              <li>
+                <span class="checklist-box"></span>
+                <span class="checklist-text">Install package: <code>npm install @vanikya/ota-react-native</code></span>
+              </li>
+              <li>
+                <span class="checklist-box"></span>
+                <span class="checklist-text">Native module auto-linked (verify in <code>MainApplication</code>)</span>
+              </li>
+              <li>
+                <span class="checklist-box"></span>
+                <span class="checklist-text">Override <code>getJSBundleFile()</code> in MainApplication</span>
+              </li>
+              <li>
+                <span class="checklist-box"></span>
+                <span class="checklist-text">Build release APK: <code>./gradlew assembleRelease</code></span>
+              </li>
+            </ul>
+            <h4>Functionality</h4>
+            <ul class="checklist">
+              <li>
+                <span class="checklist-box"></span>
+                <span class="checklist-text">Update check triggers on app open</span>
+              </li>
+              <li>
+                <span class="checklist-box"></span>
+                <span class="checklist-text">Bundle downloads via native module</span>
+              </li>
+              <li>
+                <span class="checklist-box"></span>
+                <span class="checklist-text">SharedPreferences stores bundle path</span>
+              </li>
+              <li>
+                <span class="checklist-box"></span>
+                <span class="checklist-text">App restart loads new bundle</span>
+              </li>
+              <li>
+                <span class="checklist-box"></span>
+                <span class="checklist-text">Rollback works if update fails</span>
+              </li>
+            </ul>
+          </div>
+        </div>
+
+        <!-- Bare RN iOS -->
+        <div class="testing-card">
+          <div class="testing-card-header">
+            <span class="platform-icon">&#127822;</span>
+            <h3>Bare React Native - iOS</h3>
+          </div>
+          <div class="testing-card-content">
+            <h4>Setup</h4>
+            <ul class="checklist">
+              <li>
+                <span class="checklist-box"></span>
+                <span class="checklist-text">Install package: <code>npm install @vanikya/ota-react-native</code></span>
+              </li>
+              <li>
+                <span class="checklist-box"></span>
+                <span class="checklist-text">Run <code>pod install</code> in ios directory</span>
+              </li>
+              <li>
+                <span class="checklist-box"></span>
+                <span class="checklist-text">Override <code>bundleURL()</code> in AppDelegate</span>
+              </li>
+              <li>
+                <span class="checklist-box"></span>
+                <span class="checklist-text">Build release IPA via Xcode or <code>xcodebuild</code></span>
+              </li>
+            </ul>
+            <h4>Functionality</h4>
+            <ul class="checklist">
+              <li>
+                <span class="checklist-box"></span>
+                <span class="checklist-text">Update check triggers on app open</span>
+              </li>
+              <li>
+                <span class="checklist-box"></span>
+                <span class="checklist-text">Bundle downloads via native module</span>
+              </li>
+              <li>
+                <span class="checklist-box"></span>
+                <span class="checklist-text">UserDefaults stores bundle path</span>
+              </li>
+              <li>
+                <span class="checklist-box"></span>
+                <span class="checklist-text">App restart loads new bundle</span>
+              </li>
+              <li>
+                <span class="checklist-box"></span>
+                <span class="checklist-text">Rollback works if update fails</span>
+              </li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
   <section class="comparison">
     <div class="container">
       <div class="section-header">
@@ -782,6 +1199,17 @@ ota release --app my-app \
           <a href="https://github.com/vanikya/ota-update" class="btn btn-primary">Get Started Free</a>
           <a href="https://www.npmjs.com/package/@vanikya/ota-react-native" class="btn btn-secondary">View on npm</a>
         </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="built-by">
+    <div class="container">
+      <div class="built-by-content">
+        <span class="built-by-text">Built with care by</span>
+        <a href="https://vanikya.ai" target="_blank" rel="noopener noreferrer">
+          <img src="https://ik.imagekit.io/vanikya/vanikya.ai_logo.png?updatedAt=1744132669239" alt="Vanikya.ai" class="built-by-logo">
+        </a>
       </div>
     </div>
   </section>

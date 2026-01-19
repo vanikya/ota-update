@@ -2,6 +2,8 @@
 
 > **Beta Notice**: This package is currently in beta. Testing is in progress and APIs may change. Use in production at your own discretion. We welcome feedback and bug reports via [GitHub Issues](https://github.com/vanikya/ota-update/issues).
 
+**[Documentation](https://vanikya.github.io/ota-update/)** | **[npm](https://www.npmjs.com/package/@vanikya/ota-react-native)** | **[CLI](https://www.npmjs.com/package/@vanikya/ota-cli)**
+
 A self-hosted Over-The-Air (OTA) update system for React Native and Expo apps. Replace EAS Updates or Microsoft CodePush with your own infrastructure built on Cloudflare's edge network.
 
 ## Features

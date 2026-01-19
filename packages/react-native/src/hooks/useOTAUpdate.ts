@@ -45,10 +45,13 @@ export interface UseOTAUpdateResult {
   downloadProgress: DownloadProgress | null;
   error: Error | null;
   currentVersion: string | null;
+  isDismissed: boolean;
   checkForUpdate: () => Promise<UpdateInfo | null>;
   downloadUpdate: () => Promise<void>;
   applyUpdate: (restartApp?: boolean) => Promise<void>;
   clearPendingUpdate: () => Promise<void>;
+  dismissUpdate: () => void;
+  resetDismiss: () => void;
 }
 
 // Generate or get device ID
@@ -76,6 +79,7 @@ export function useOTAUpdate(config: OTAUpdateConfig): UseOTAUpdateResult {
   const [downloadProgress, setDownloadProgress] = useState<DownloadProgress | null>(null);
   const [error, setError] = useState<Error | null>(null);
   const [currentVersion, setCurrentVersion] = useState<string | null>(null);
+  const [isDismissed, setIsDismissed] = useState<boolean>(false);
 
   const apiClient = useRef(new OTAApiClient(serverUrl));
   const storage = useRef(new UpdateStorage());
@@ -133,6 +137,11 @@ export function useOTAUpdate(config: OTAUpdateConfig): UseOTAUpdateResult {
         isMandatory: response.release.isMandatory,
         releaseNotes: response.release.releaseNotes,
       };
+
+      // Reset dismiss state if this is a different version than what was previously dismissed
+      if (!updateInfo || updateInfo.version !== info.version) {
+        setIsDismissed(false);
+      }
 
       setUpdateInfo(info);
       setStatus('available');
@@ -324,6 +333,16 @@ export function useOTAUpdate(config: OTAUpdateConfig): UseOTAUpdateResult {
     setStatus('idle');
   }, []);
 
+  // Dismiss the update notification (user can hide the banner)
+  const dismissUpdate = useCallback(() => {
+    setIsDismissed(true);
+  }, []);
+
+  // Reset dismiss state (useful when a new update is found)
+  const resetDismiss = useCallback(() => {
+    setIsDismissed(false);
+  }, []);
+
   // Check on mount
   useEffect(() => {
     if (checkOnMount) {
@@ -354,9 +373,12 @@ export function useOTAUpdate(config: OTAUpdateConfig): UseOTAUpdateResult {
     downloadProgress,
     error,
     currentVersion,
+    isDismissed,
     checkForUpdate,
     downloadUpdate,
     applyUpdate,
     clearPendingUpdate,
+    dismissUpdate,
+    resetDismiss,
   };
 }
