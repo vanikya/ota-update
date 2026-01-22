@@ -85,6 +85,70 @@ class OTAUpdate: NSObject {
         }
     }
 
+    // Download file directly to disk - bypasses JS memory entirely
+    // This is critical for large bundles (5MB+)
+    @objc
+    func downloadFile(_ urlString: String, destPath: String, resolver: @escaping RCTPromiseResolveBlock, rejecter: @escaping RCTPromiseRejectBlock) {
+        guard let url = URL(string: urlString) else {
+            rejecter("DOWNLOAD_ERROR", "Invalid URL: \(urlString)", nil)
+            return
+        }
+
+        let destURL = URL(fileURLWithPath: destPath)
+
+        // Ensure parent directory exists
+        let parentDir = destURL.deletingLastPathComponent()
+        do {
+            try FileManager.default.createDirectory(at: parentDir, withIntermediateDirectories: true, attributes: nil)
+        } catch {
+            rejecter("DOWNLOAD_ERROR", "Failed to create directory: \(error.localizedDescription)", error)
+            return
+        }
+
+        let task = URLSession.shared.downloadTask(with: url) { tempURL, response, error in
+            if let error = error {
+                rejecter("DOWNLOAD_ERROR", "Download failed: \(error.localizedDescription)", error)
+                return
+            }
+
+            guard let httpResponse = response as? HTTPURLResponse else {
+                rejecter("DOWNLOAD_ERROR", "Invalid response", nil)
+                return
+            }
+
+            guard httpResponse.statusCode == 200 else {
+                rejecter("DOWNLOAD_ERROR", "Download failed with status \(httpResponse.statusCode)", nil)
+                return
+            }
+
+            guard let tempURL = tempURL else {
+                rejecter("DOWNLOAD_ERROR", "No temporary file created", nil)
+                return
+            }
+
+            do {
+                // Remove existing file if it exists
+                if FileManager.default.fileExists(atPath: destPath) {
+                    try FileManager.default.removeItem(atPath: destPath)
+                }
+
+                // Move downloaded file to destination
+                try FileManager.default.moveItem(at: tempURL, to: destURL)
+
+                // Get file size
+                let attributes = try FileManager.default.attributesOfItem(atPath: destPath)
+                let fileSize = attributes[.size] as? Int64 ?? 0
+
+                let result: [String: Any] = ["fileSize": fileSize]
+                resolver(result)
+            } catch {
+                rejecter("DOWNLOAD_ERROR", "Failed to save file: \(error.localizedDescription)", error)
+            }
+        }
+
+        task.resume()
+    }
+
     // MARK: - Cryptography
 
     @objc
@@ -101,6 +165,48 @@ class OTAUpdate: NSObject {
 
         let hexString = hash.map { String(format: "%02x", $0) }.joined()
         resolver(hexString)
+    }
+
+    // Calculate SHA256 from file path - streams file to avoid memory issues
+    // Critical for large bundles (5MB+)
+    @objc
+    func calculateSHA256FromFile(_ filePath: String, resolver: @escaping RCTPromiseResolveBlock, rejecter: @escaping RCTPromiseRejectBlock) {
+        DispatchQueue.global(qos: .userInitiated).async {
+            guard FileManager.default.fileExists(atPath: filePath) else {
+                rejecter("FILE_ERROR", "File not found: \(filePath)", nil)
+                return
+            }
+
+            guard let inputStream = InputStream(fileAtPath: filePath) else {
+                rejecter("FILE_ERROR", "Could not open file: \(filePath)", nil)
+                return
+            }
+
+            inputStream.open()
+            defer { inputStream.close() }
+
+            var context = CC_SHA256_CTX()
+            CC_SHA256_Init(&context)
+
+            let bufferSize = 8192 // 8KB buffer
+            var buffer = [UInt8](repeating: 0, count: bufferSize)
+
+            while inputStream.hasBytesAvailable {
+                let bytesRead = inputStream.read(&buffer, maxLength: bufferSize)
+                if bytesRead > 0 {
+                    CC_SHA256_Update(&context, buffer, CC_LONG(bytesRead))
+                } else if bytesRead < 0 {
+                    rejecter("READ_ERROR", "Error reading file", inputStream.streamError)
+                    return
+                }
+            }
+
+            var hash = [UInt8](repeating: 0, count: Int(CC_SHA256_DIGEST_LENGTH))
+            CC_SHA256_Final(&hash, &context)
+
+            let hexString = hash.map { String(format: "%02x", $0) }.joined()
+            resolver(hexString)
+        }
     }
 
     @objc

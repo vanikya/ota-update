@@ -5,6 +5,10 @@ import android.content.SharedPreferences
 import android.util.Base64
 import com.facebook.react.bridge.*
 import java.io.File
+import java.io.FileOutputStream
+import java.io.InputStream
+import java.net.HttpURLConnection
+import java.net.URL
 import java.security.MessageDigest
 
 class OTAUpdateModule(reactContext: ReactApplicationContext) : ReactContextBaseJavaModule(reactContext) {
@@ -92,6 +96,65 @@ class OTAUpdateModule(reactContext: ReactApplicationContext) : ReactContextBaseJ
         }
     }
 
+    // Download file directly to disk - bypasses JS memory entirely
+    // This is critical for large bundles (5MB+)
+    @ReactMethod
+    fun downloadFile(urlString: String, destPath: String, promise: Promise) {
+        Thread {
+            var connection: HttpURLConnection? = null
+            var inputStream: InputStream? = null
+            var outputStream: FileOutputStream? = null
+
+            try {
+                val url = URL(urlString)
+                connection = url.openConnection() as HttpURLConnection
+                connection.connectTimeout = 30000
+                connection.readTimeout = 60000
+                connection.requestMethod = "GET"
+                connection.connect()
+
+                val responseCode = connection.responseCode
+                if (responseCode != HttpURLConnection.HTTP_OK) {
+                    promise.reject("DOWNLOAD_ERROR", "Download failed with status $responseCode")
+                    return@Thread
+                }
+
+                // Ensure parent directory exists
+                val destFile = File(destPath)
+                destFile.parentFile?.mkdirs()
+
+                inputStream = connection.inputStream
+                outputStream = FileOutputStream(destFile)
+
+                val buffer = ByteArray(8192) // 8KB buffer for efficient streaming
+                var bytesRead: Int
+                var totalBytesRead: Long = 0
+
+                while (inputStream.read(buffer).also { bytesRead = it } != -1) {
+                    outputStream.write(buffer, 0, bytesRead)
+                    totalBytesRead += bytesRead
+                }
+
+                outputStream.flush()
+
+                val result = Arguments.createMap()
+                result.putDouble("fileSize", totalBytesRead.toDouble())
+                promise.resolve(result)
+
+            } catch (e: Exception) {
+                promise.reject("DOWNLOAD_ERROR", "Failed to download file: ${e.message}", e)
+            } finally {
+                try {
+                    inputStream?.close()
+                    outputStream?.close()
+                    connection?.disconnect()
+                } catch (e: Exception) {
+                    // Ignore cleanup errors
+                }
+            }
+        }.start()
+    }
+
     // Cryptography
 
     @ReactMethod
@@ -105,6 +168,37 @@ class OTAUpdateModule(reactContext: ReactApplicationContext) : ReactContextBaseJ
         } catch (e: Exception) {
             promise.reject("HASH_ERROR", "Failed to calculate hash: ${e.message}", e)
         }
+    }
+
+    // Calculate SHA256 from file path - streams file to avoid memory issues
+    // Critical for large bundles (5MB+)
+    @ReactMethod
+    fun calculateSHA256FromFile(filePath: String, promise: Promise) {
+        Thread {
+            try {
+                val file = File(filePath)
+                if (!file.exists()) {
+                    promise.reject("FILE_ERROR", "File not found: $filePath")
+                    return@Thread
+                }
+
+                val digest = MessageDigest.getInstance("SHA-256")
+                val buffer = ByteArray(8192) // 8KB buffer
+                var bytesRead: Int
+
+                file.inputStream().use { inputStream ->
+                    while (inputStream.read(buffer).also { bytesRead = it } != -1) {
+                        digest.update(buffer, 0, bytesRead)
+                    }
+                }
+
+                val hash = digest.digest()
+                val hexString = hash.joinToString("") { "%02x".format(it) }
+                promise.resolve(hexString)
+            } catch (e: Exception) {
+                promise.reject("HASH_ERROR", "Failed to calculate hash: ${e.message}", e)
+            }
+        }.start()
     }
 
     @ReactMethod

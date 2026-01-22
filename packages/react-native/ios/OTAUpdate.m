@@ -35,8 +35,17 @@ RCT_EXTERN_METHOD(makeDirectory:(NSString *)path
                   resolver:(RCTPromiseResolveBlock)resolver
                   rejecter:(RCTPromiseRejectBlock)rejecter)
 
+RCT_EXTERN_METHOD(downloadFile:(NSString *)urlString
+                  destPath:(NSString *)destPath
+                  resolver:(RCTPromiseResolveBlock)resolver
+                  rejecter:(RCTPromiseRejectBlock)rejecter)
+
 // Cryptography
 RCT_EXTERN_METHOD(calculateSHA256:(NSString *)base64Content
+                  resolver:(RCTPromiseResolveBlock)resolver
+                  rejecter:(RCTPromiseRejectBlock)rejecter)
+
+RCT_EXTERN_METHOD(calculateSHA256FromFile:(NSString *)filePath
                   resolver:(RCTPromiseResolveBlock)resolver
                   rejecter:(RCTPromiseRejectBlock)rejecter)
 

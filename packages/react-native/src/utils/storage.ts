@@ -17,6 +17,10 @@ export interface StorageAdapter {
   deleteFile(path: string): Promise<void>;
   exists(path: string): Promise<boolean>;
   makeDirectory(path: string): Promise<void>;
+  // Download file directly to disk without going through JS memory
+  downloadToFile(url: string, destPath: string): Promise<{ fileSize: number }>;
+  // Calculate SHA256 hash from file path (without loading into memory)
+  calculateHashFromFile?(path: string): Promise<string>;
 }
 
 // Helper to normalize file paths (remove file:// prefix)
@@ -122,6 +126,71 @@ class ExpoStorageAdapter implements StorageAdapter {
   async makeDirectory(path: string): Promise<void> {
     await ExpoFileSystem.makeDirectoryAsync(path, { intermediates: true });
   }
+
+  async downloadToFile(url: string, destPath: string): Promise<{ fileSize: number }> {
+    // Use Expo's downloadAsync which downloads directly to file
+    // This bypasses JS memory entirely - critical for large bundles
+    const result = await ExpoFileSystem.downloadAsync(url, destPath);
+
+    if (result.status !== 200) {
+      throw new Error(`Download failed with status ${result.status}`);
+    }
+
+    // Get file size
+    const info = await ExpoFileSystem.getInfoAsync(destPath);
+    return { fileSize: info.size || 0 };
+  }
+
+  async calculateHashFromFile(path: string): Promise<string> {
+    // For Expo, we need to read the file and use expo-crypto
+    // Try to use expo-crypto if available
+    let ExpoCrypto: any = null;
+    try {
+      ExpoCrypto = require('expo-crypto');
+    } catch {
+      // expo-crypto not available
+    }
+
+    if (ExpoCrypto?.digest) {
+      // Read file as base64 and convert to Uint8Array
+      const base64 = await ExpoFileSystem.readAsStringAsync(path, {
+        encoding: ExpoFileSystem.EncodingType.Base64,
+      });
+      const binary = atob(base64);
+      const bytes = new Uint8Array(binary.length);
+      for (let i = 0; i < binary.length; i++) {
+        bytes[i] = binary.charCodeAt(i);
+      }
+      const hashBuffer = await ExpoCrypto.digest(
+        ExpoCrypto.CryptoDigestAlgorithm.SHA256,
+        bytes
+      );
+      // Convert ArrayBuffer to hex
+      const hashBytes = new Uint8Array(hashBuffer);
+      return Array.from(hashBytes)
+        .map(b => b.toString(16).padStart(2, '0'))
+        .join('');
+    }
+
+    // Fallback to SubtleCrypto if available
+    if (typeof crypto !== 'undefined' && crypto.subtle) {
+      const base64 = await ExpoFileSystem.readAsStringAsync(path, {
+        encoding: ExpoFileSystem.EncodingType.Base64,
+      });
+      const binary = atob(base64);
+      const bytes = new Uint8Array(binary.length);
+      for (let i = 0; i < binary.length; i++) {
+        bytes[i] = binary.charCodeAt(i);
+      }
+      const hashBuffer = await crypto.subtle.digest('SHA-256', bytes.buffer);
+      const hashBytes = new Uint8Array(hashBuffer);
+      return Array.from(hashBytes)
+        .map(b => b.toString(16).padStart(2, '0'))
+        .join('');
+    }
+
+    throw new Error('No crypto implementation available for hash calculation');
+  }
 }
 
 // Native implementation for bare React Native
@@ -186,6 +255,51 @@ class NativeStorageAdapter implements StorageAdapter {
       throw new Error('OTAUpdate native module not found');
     }
     await OTAUpdateNative.makeDirectory(path);
+  }
+
+  async downloadToFile(url: string, destPath: string): Promise<{ fileSize: number }> {
+    if (!OTAUpdateNative) {
+      throw new Error('OTAUpdate native module not found');
+    }
+
+    // Use native module's downloadFile method if available (preferred)
+    if (OTAUpdateNative.downloadFile) {
+      const result = await OTAUpdateNative.downloadFile(url, destPath);
+      return { fileSize: result.fileSize || 0 };
+    }
+
+    // Fallback: download via fetch and write in chunks
+    // This is less efficient but works without native download support
+    const response = await fetch(url);
+    if (!response.ok) {
+      throw new Error(`Download failed with status ${response.status}`);
+    }
+
+    const data = await response.arrayBuffer();
+    const base64 = arrayBufferToBase64(data);
+    await OTAUpdateNative.writeFileBase64(destPath, base64);
+
+    return { fileSize: data.byteLength };
+  }
+
+  async calculateHashFromFile(path: string): Promise<string> {
+    if (!OTAUpdateNative) {
+      throw new Error('OTAUpdate native module not found');
+    }
+
+    // Use native module's calculateSHA256FromFile if available (preferred - streams file)
+    if (OTAUpdateNative.calculateSHA256FromFile) {
+      return OTAUpdateNative.calculateSHA256FromFile(path);
+    }
+
+    // Fallback: read file as base64 and use the base64 hash method
+    // This loads the file into memory, but is better than nothing
+    if (OTAUpdateNative.calculateSHA256 && OTAUpdateNative.readFileBase64) {
+      const base64 = await OTAUpdateNative.readFileBase64(path);
+      return OTAUpdateNative.calculateSHA256(base64);
+    }
+
+    throw new Error('No hash calculation method available');
   }
 }
 
@@ -301,6 +415,62 @@ export class UpdateStorage {
   async cleanOldBundles(keepReleaseId: string): Promise<void> {
     // For now, we just keep one bundle at a time
     // In a more advanced implementation, we might keep a few for rollback
+  }
+
+  /**
+   * Download bundle directly to file, bypassing JS memory.
+   * Critical for large bundles (5MB+).
+   *
+   * @param url The URL to download from
+   * @param releaseId The release ID (used for filename)
+   * @returns The normalized file path where bundle was saved
+   */
+  async downloadBundleToFile(url: string, releaseId: string): Promise<{ path: string; fileSize: number }> {
+    await this.ensureDirectory();
+
+    const bundlePath = `${this.baseDir}${releaseId}.bundle`;
+    const result = await this.storage.downloadToFile(url, bundlePath);
+
+    // Return normalized path for native module compatibility
+    return {
+      path: normalizePath(bundlePath),
+      fileSize: result.fileSize,
+    };
+  }
+
+  /**
+   * Calculate SHA256 hash of a stored bundle file.
+   * Uses streaming to avoid loading entire file into memory.
+   *
+   * @param releaseId The release ID of the bundle
+   * @returns The hash string (without 'sha256:' prefix)
+   */
+  async calculateBundleHash(releaseId: string): Promise<string> {
+    const bundlePath = this.getRawBundlePath(releaseId);
+
+    if (!await this.storage.exists(bundlePath)) {
+      throw new Error('Bundle file not found');
+    }
+
+    if (this.storage.calculateHashFromFile) {
+      return this.storage.calculateHashFromFile(bundlePath);
+    }
+
+    // Fallback: read file into memory and calculate hash
+    // This is not ideal for large files but works as a fallback
+    const data = await this.storage.readFileAsBuffer(bundlePath);
+    const bytes = new Uint8Array(data);
+
+    // Use SubtleCrypto if available
+    if (typeof crypto !== 'undefined' && crypto.subtle) {
+      const hashBuffer = await crypto.subtle.digest('SHA-256', bytes.buffer);
+      const hashBytes = new Uint8Array(hashBuffer);
+      return Array.from(hashBytes)
+        .map(b => b.toString(16).padStart(2, '0'))
+        .join('');
+    }
+
+    throw new Error('No hash calculation method available');
   }
 
   /**

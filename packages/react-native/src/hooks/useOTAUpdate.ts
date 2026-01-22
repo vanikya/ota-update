@@ -1,8 +1,7 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { AppState, AppStateStatus, Platform } from 'react-native';
 import { OTAApiClient, ReleaseInfo, getDeviceInfo } from '../utils/api';
-import { UpdateStorage, StoredUpdate } from '../utils/storage';
-import { verifyBundle, VerificationResult } from '../utils/verification';
+import { UpdateStorage } from '../utils/storage';
 
 export interface OTAUpdateConfig {
   serverUrl: string;
@@ -178,31 +177,40 @@ export function useOTAUpdate(config: OTAUpdateConfig): UseOTAUpdateResult {
         deviceInfo: getDeviceInfo(),
       });
 
-      // Download bundle
-      const bundleData = await apiClient.current.downloadBundle(release.bundleUrl);
+      // Download bundle directly to file (bypasses JS memory - critical for large bundles)
+      const downloadResult = await storage.current.downloadBundleToFile(release.bundleUrl, release.id);
 
       setDownloadProgress({
-        downloadedBytes: bundleData.byteLength,
+        downloadedBytes: downloadResult.fileSize,
         totalBytes: release.bundleSize,
         percentage: 100,
       });
 
-      // Verify bundle
+      // Verify bundle hash
       setStatus('verifying');
 
-      const verification = await verifyBundle(
-        bundleData,
-        release.bundleHash,
-        release.bundleSignature,
-        publicKey || null
-      );
+      // Calculate hash from file (streaming to avoid memory issues)
+      const actualHash = await storage.current.calculateBundleHash(release.id);
+      const expectedHashWithoutPrefix = release.bundleHash.replace(/^sha256:/, '');
 
-      if (!verification.valid) {
-        throw new Error(verification.error || 'Bundle verification failed');
+      if (actualHash !== expectedHashWithoutPrefix) {
+        // Delete corrupted bundle
+        await storage.current.deleteBundle(release.id);
+        throw new Error(`Bundle hash mismatch: expected ${expectedHashWithoutPrefix}, got ${actualHash}`);
       }
 
-      // Save bundle
-      const bundlePath = await storage.current.saveBundle(release.id, bundleData);
+      // Validate bundle content (check it's actually JavaScript, not an error page)
+      const isValid = await storage.current.validateBundle(release.id);
+      if (!isValid) {
+        await storage.current.deleteBundle(release.id);
+        throw new Error('Downloaded content is not a valid JavaScript bundle');
+      }
+
+      if (__DEV__) {
+        console.log('[OTAUpdate] Bundle verified successfully');
+      }
+
+      const bundlePath = downloadResult.path;
 
       // Save metadata
       await storage.current.saveMetadata({

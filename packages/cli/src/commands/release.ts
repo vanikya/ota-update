@@ -5,7 +5,7 @@ import ora from 'ora';
 import * as fs from 'fs';
 import { listApps, listReleases, createRelease, updateRollout, rollbackRelease } from '../utils/api.js';
 import { loadProjectConfig } from '../config.js';
-import { createBundle, detectProjectType, getBundleInfo } from '../utils/bundle.js';
+import { createBundle, detectProjectType, getBundleInfo, cleanBundleOutput } from '../utils/bundle.js';
 import { signBundleForApp, loadSigningKeys } from '../utils/signing.js';
 
 export function createReleaseCommand(): Command {
@@ -184,6 +184,13 @@ export function createReleaseCommand(): Command {
           console.log(`  Platform: ${platform}`);
           if (options.mandatory) {
             console.log(`  Mandatory: ${chalk.yellow('Yes')}`);
+          }
+
+          // Clean up temporary bundle files (only if we built the bundle ourselves)
+          if (!options.bundle) {
+            cleanBundleOutput();
+            console.log('');
+            console.log(chalk.gray('  Cleaned up temporary bundle files'));
           }
         } catch (error: any) {
           uploadSpinner.fail('Upload failed');
