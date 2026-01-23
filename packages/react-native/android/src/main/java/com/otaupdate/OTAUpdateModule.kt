@@ -229,6 +229,24 @@ class OTAUpdateModule(reactContext: ReactApplicationContext) : ReactContextBaseJ
     @ReactMethod
     fun applyBundle(bundlePath: String, restart: Boolean, promise: Promise) {
         try {
+            // Validate bundle file exists before storing path
+            val bundleFile = File(bundlePath)
+            if (!bundleFile.exists()) {
+                promise.reject("APPLY_ERROR", "Bundle file does not exist: $bundlePath")
+                return
+            }
+            if (!bundleFile.canRead()) {
+                promise.reject("APPLY_ERROR", "Bundle file is not readable: $bundlePath")
+                return
+            }
+            if (bundleFile.length() < 100) {
+                promise.reject("APPLY_ERROR", "Bundle file is too small (likely corrupted): ${bundleFile.length()} bytes")
+                return
+            }
+
+            // Log for debugging
+            android.util.Log.d("OTAUpdate", "Applying bundle: $bundlePath (${bundleFile.length()} bytes)")
+
             // Store the bundle path for next launch
             prefs.edit().putString("BundlePath", bundlePath).apply()
 

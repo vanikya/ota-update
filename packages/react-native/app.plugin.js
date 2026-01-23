@@ -41,9 +41,17 @@ function withOTAUpdateAndroid(config) {
       override fun getJSBundleFile(): String? {
         val prefs: SharedPreferences = applicationContext.getSharedPreferences("OTAUpdate", android.content.Context.MODE_PRIVATE)
         val bundlePath = prefs.getString("BundlePath", null)
-        if (bundlePath != null && File(bundlePath).exists()) {
-          return bundlePath
+        android.util.Log.d("OTAUpdate", "getJSBundleFile called, stored path: $bundlePath")
+        if (bundlePath != null) {
+          val file = File(bundlePath)
+          if (file.exists() && file.canRead()) {
+            android.util.Log.d("OTAUpdate", "Loading OTA bundle: $bundlePath (${file.length()} bytes)")
+            return bundlePath
+          } else {
+            android.util.Log.w("OTAUpdate", "OTA bundle not found or not readable: $bundlePath, exists=${file.exists()}")
+          }
         }
+        android.util.Log.d("OTAUpdate", "Loading default bundle")
         return null
       }
 `;
@@ -64,9 +72,17 @@ function withOTAUpdateAndroid(config) {
       override fun getJSBundleFile(): String? {
         val prefs: SharedPreferences = applicationContext.getSharedPreferences("OTAUpdate", android.content.Context.MODE_PRIVATE)
         val bundlePath = prefs.getString("BundlePath", null)
-        if (bundlePath != null && File(bundlePath).exists()) {
-          return bundlePath
+        android.util.Log.d("OTAUpdate", "getJSBundleFile called, stored path: $bundlePath")
+        if (bundlePath != null) {
+          val file = File(bundlePath)
+          if (file.exists() && file.canRead()) {
+            android.util.Log.d("OTAUpdate", "Loading OTA bundle: $bundlePath (${file.length()} bytes)")
+            return bundlePath
+          } else {
+            android.util.Log.w("OTAUpdate", "OTA bundle not found or not readable: $bundlePath, exists=${file.exists()}")
+          }
         }
+        android.util.Log.d("OTAUpdate", "Loading default bundle")
         return null
       }
 `;
@@ -86,9 +102,17 @@ function withOTAUpdateAndroid(config) {
       const getJSBundleFileOverride = `override fun getJSBundleFile(): String? {
         val prefs: SharedPreferences = applicationContext.getSharedPreferences("OTAUpdate", android.content.Context.MODE_PRIVATE)
         val bundlePath = prefs.getString("BundlePath", null)
-        if (bundlePath != null && File(bundlePath).exists()) {
-          return bundlePath
+        android.util.Log.d("OTAUpdate", "getJSBundleFile called, stored path: $bundlePath")
+        if (bundlePath != null) {
+          val file = File(bundlePath)
+          if (file.exists() && file.canRead()) {
+            android.util.Log.d("OTAUpdate", "Loading OTA bundle: $bundlePath (${file.length()} bytes)")
+            return bundlePath
+          } else {
+            android.util.Log.w("OTAUpdate", "OTA bundle not found or not readable: $bundlePath, exists=${file.exists()}")
+          }
         }
+        android.util.Log.d("OTAUpdate", "Loading default bundle")
         return null
       }
 
@@ -114,9 +138,17 @@ function withOTAUpdateAndroid(config) {
       override fun getJSBundleFile(): String? {
         val prefs: SharedPreferences = applicationContext.getSharedPreferences("OTAUpdate", android.content.Context.MODE_PRIVATE)
         val bundlePath = prefs.getString("BundlePath", null)
-        if (bundlePath != null && File(bundlePath).exists()) {
-          return bundlePath
+        android.util.Log.d("OTAUpdate", "getJSBundleFile called, stored path: $bundlePath")
+        if (bundlePath != null) {
+          val file = File(bundlePath)
+          if (file.exists() && file.canRead()) {
+            android.util.Log.d("OTAUpdate", "Loading OTA bundle: $bundlePath (${file.length()} bytes)")
+            return bundlePath
+          } else {
+            android.util.Log.w("OTAUpdate", "OTA bundle not found or not readable: $bundlePath, exists=${file.exists()}")
+          }
         }
+        android.util.Log.d("OTAUpdate", "Loading default bundle")
         return null
       }
 `;
@@ -152,12 +184,21 @@ function withOTAUpdateIOS(config) {
       const helperFunction = `
   // OTA Update: Check for downloaded bundle
   private func getOTABundleURL() -> URL? {
-    if let bundlePath = UserDefaults.standard.string(forKey: "OTAUpdateBundlePath") {
-      let fileURL = URL(fileURLWithPath: bundlePath)
-      if FileManager.default.fileExists(atPath: bundlePath) {
-        return fileURL
+    let bundlePath = UserDefaults.standard.string(forKey: "OTAUpdateBundlePath")
+    NSLog("[OTAUpdate] getOTABundleURL called, stored path: %@", bundlePath ?? "nil")
+    if let path = bundlePath {
+      let fileManager = FileManager.default
+      if fileManager.fileExists(atPath: path) {
+        if let attrs = try? fileManager.attributesOfItem(atPath: path),
+           let size = attrs[.size] as? Int64 {
+          NSLog("[OTAUpdate] Loading OTA bundle: %@ (%lld bytes)", path, size)
+        }
+        return URL(fileURLWithPath: path)
+      } else {
+        NSLog("[OTAUpdate] OTA bundle not found at path: %@", path)
       }
     }
+    NSLog("[OTAUpdate] Loading default bundle")
     return nil
   }
 `;

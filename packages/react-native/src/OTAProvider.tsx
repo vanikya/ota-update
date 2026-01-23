@@ -4,6 +4,7 @@ import React, {
   useCallback,
   useEffect,
   useState,
+  useRef,
   ReactNode,
 } from 'react';
 import { Alert, Platform } from 'react-native';
@@ -14,6 +15,7 @@ import {
   UpdateStatus,
   UpdateInfo,
 } from './hooks/useOTAUpdate';
+import { UpdateStorage } from './utils/storage';
 
 // Context type
 interface OTAContextValue extends UseOTAUpdateResult {
@@ -46,6 +48,44 @@ export function OTAProvider({
 }: OTAProviderProps) {
   const ota = useOTAUpdate(config);
   const [handledMandatory, setHandledMandatory] = useState(false);
+  const initRef = useRef(false);
+
+  // Startup initialization - check for and clear corrupted bundles
+  useEffect(() => {
+    if (initRef.current) return;
+    initRef.current = true;
+
+    const initializeOTA = async () => {
+      try {
+        const storage = new UpdateStorage();
+
+        // Check for corrupted bundle and clear it
+        const wasCorrupted = await storage.clearCorruptedBundle();
+        if (wasCorrupted && __DEV__) {
+          console.log('[OTAUpdate] Cleared corrupted bundle on startup');
+        }
+
+        // Also validate that if there's a pending bundle path, the file actually exists
+        const metadata = await storage.getMetadata();
+        if (metadata && metadata.bundlePath) {
+          const bundleExists = await storage.validateBundle(metadata.releaseId);
+          if (!bundleExists) {
+            if (__DEV__) {
+              console.log('[OTAUpdate] Bundle file missing or invalid, clearing metadata');
+            }
+            await storage.clearMetadata();
+            await storage.clearNativePendingBundle();
+          }
+        }
+      } catch (error) {
+        if (__DEV__) {
+          console.error('[OTAUpdate] Startup initialization error:', error);
+        }
+      }
+    };
+
+    initializeOTA();
+  }, []);
 
   // Handle callbacks
   useEffect(() => {

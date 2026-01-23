@@ -240,6 +240,35 @@ class OTAUpdate: NSObject {
 
     @objc
     func applyBundle(_ bundlePath: String, restart: Bool, resolver: @escaping RCTPromiseResolveBlock, rejecter: @escaping RCTPromiseRejectBlock) {
+        // Validate bundle file exists before storing path
+        let fileManager = FileManager.default
+
+        guard fileManager.fileExists(atPath: bundlePath) else {
+            rejecter("APPLY_ERROR", "Bundle file does not exist: \(bundlePath)", nil)
+            return
+        }
+
+        guard fileManager.isReadableFile(atPath: bundlePath) else {
+            rejecter("APPLY_ERROR", "Bundle file is not readable: \(bundlePath)", nil)
+            return
+        }
+
+        // Check file size
+        do {
+            let attributes = try fileManager.attributesOfItem(atPath: bundlePath)
+            let fileSize = attributes[.size] as? Int64 ?? 0
+            if fileSize < 100 {
+                rejecter("APPLY_ERROR", "Bundle file is too small (likely corrupted): \(fileSize) bytes", nil)
+                return
+            }
+
+            // Log for debugging
+            NSLog("[OTAUpdate] Applying bundle: %@ (%lld bytes)", bundlePath, fileSize)
+        } catch {
+            rejecter("APPLY_ERROR", "Failed to get bundle file attributes: \(error.localizedDescription)", error)
+            return
+        }
+
         // Store the bundle path for next launch
         UserDefaults.standard.set(bundlePath, forKey: "OTAUpdateBundlePath")
         UserDefaults.standard.synchronize()
