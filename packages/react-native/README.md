@@ -46,10 +46,99 @@ eas build --platform ios
 
 ### For bare React Native apps
 
-Install pods (iOS):
+1. Install pods (iOS):
 
 ```bash
 cd ios && pod install
+```
+
+2. **IMPORTANT**: You must manually configure native code to load OTA bundles. Without this, downloaded bundles will never be applied.
+
+#### Android Setup (MainApplication.kt)
+
+Add the `getJSBundleFile()` override inside your `ReactNativeHost`:
+
+```kotlin
+import android.content.SharedPreferences
+import java.io.File
+
+// Inside your MainApplication class, find the ReactNativeHost and add:
+override fun getJSBundleFile(): String? {
+    val prefs: SharedPreferences = applicationContext.getSharedPreferences("OTAUpdate", android.content.Context.MODE_PRIVATE)
+    val bundlePath = prefs.getString("BundlePath", null)
+    if (bundlePath != null && File(bundlePath).exists()) {
+        return bundlePath
+    }
+    return null  // Falls back to default bundle
+}
+```
+
+Example full `MainApplication.kt`:
+
+```kotlin
+package com.yourapp
+
+import android.app.Application
+import android.content.SharedPreferences
+import java.io.File
+import com.facebook.react.PackageList
+import com.facebook.react.ReactApplication
+import com.facebook.react.ReactHost
+import com.facebook.react.ReactNativeHost
+import com.facebook.react.defaults.DefaultReactNativeHost
+
+class MainApplication : Application(), ReactApplication {
+
+    override val reactNativeHost: ReactNativeHost =
+        object : DefaultReactNativeHost(this) {
+            // ADD THIS METHOD for OTA updates
+            override fun getJSBundleFile(): String? {
+                val prefs: SharedPreferences = applicationContext.getSharedPreferences("OTAUpdate", android.content.Context.MODE_PRIVATE)
+                val bundlePath = prefs.getString("BundlePath", null)
+                if (bundlePath != null && File(bundlePath).exists()) {
+                    return bundlePath
+                }
+                return null
+            }
+
+            override fun getPackages() = PackageList(this).packages
+            override fun getJSMainModuleName() = "index"
+            override fun getUseDeveloperSupport() = BuildConfig.DEBUG
+            override val isNewArchEnabled = BuildConfig.IS_NEW_ARCHITECTURE_ENABLED
+            override val isHermesEnabled = BuildConfig.IS_HERMES_ENABLED
+        }
+
+    // ... rest of your MainApplication
+}
+```
+
+#### iOS Setup (AppDelegate.swift)
+
+Modify `bundleURL()` to check for OTA bundles first:
+
+```swift
+// Add this helper function inside AppDelegate class
+private func getOTABundleURL() -> URL? {
+    if let bundlePath = UserDefaults.standard.string(forKey: "OTAUpdateBundlePath") {
+        if FileManager.default.fileExists(atPath: bundlePath) {
+            return URL(fileURLWithPath: bundlePath)
+        }
+    }
+    return nil
+}
+
+// Modify or add this bundleURL function
+func bundleURL() -> URL? {
+    // Check for downloaded OTA bundle first
+    if let otaBundle = getOTABundleURL() {
+        return otaBundle
+    }
+    #if DEBUG
+    return RCTBundleURLProvider.sharedSettings().jsBundleURL(forBundleRoot: "index")
+    #else
+    return Bundle.main.url(forResource: "main", withExtension: "jsbundle")
+    #endif
+}
 ```
 
 ## Quick Start
@@ -338,6 +427,51 @@ async function recoverFromCorruptedUpdate() {
 ```
 
 The SDK now validates downloaded bundles to prevent HTML error pages or corrupted files from being saved as bundles.
+
+## Troubleshooting
+
+### Update downloads but doesn't apply after restart
+
+This is usually because the native code to load OTA bundles is missing. Check:
+
+1. **For Expo apps**: Make sure you rebuilt the app with EAS Build after adding the plugin. OTA updates do NOT work in Expo Go.
+
+2. **For bare React Native**: Make sure you added the native code changes described in the "For bare React Native apps" section above.
+
+3. **Verify native code was injected**: During the EAS build, look for these log messages:
+   - `[OTAUpdate] Android: Successfully injected getJSBundleFile`
+   - `[OTAUpdate] iOS: Successfully modified bundleURL`
+
+4. **Check if bundle path is saved**: The path is stored in:
+   - Android: SharedPreferences key `"BundlePath"` in `"OTAUpdate"` preferences
+   - iOS: UserDefaults key `"OTAUpdateBundlePath"`
+
+### Bundle downloads but hash verification fails
+
+1. Make sure your server is returning the actual JavaScript bundle, not an HTML error page
+2. Check that the bundle wasn't corrupted during upload
+3. Try re-publishing the release with `ota release`
+
+### App crashes after OTA update
+
+Call `clearCorruptedBundle()` on app startup to recover:
+
+```tsx
+import { UpdateStorage } from '@vanikya/ota-react-native';
+
+// In your App.tsx or entry point
+useEffect(() => {
+  const storage = new UpdateStorage();
+  storage.clearCorruptedBundle();
+}, []);
+```
+
+### Debugging
+
+Enable debug logs by checking `__DEV__` console output. The SDK logs:
+- `[OTAUpdate] Bundle registered with native module`
+- `[OTAUpdate] Bundle verified successfully`
+- `[OTAUpdate] Update ready`
 
 ## License
 
