@@ -176,40 +176,8 @@ class ExpoStorageAdapter implements StorageAdapter {
       console.log('[OTAUpdate] File size:', (fileInfo as any).size, 'bytes');
     }
 
-    if (ExpoCrypto?.digestStringAsync) {
-      // Use digestStringAsync which is more efficient for large files
-      // Read file as base64
-      const base64 = await ExpoFileSystem.readAsStringAsync(path, {
-        encoding: ExpoFileSystem.EncodingType.Base64,
-      });
-
-      if (__DEV__) {
-        console.log('[OTAUpdate] File read as base64, length:', base64.length);
-      }
-
-      // Use digestStringAsync with base64 encoding
-      const hash = await ExpoCrypto.digestStringAsync(
-        ExpoCrypto.CryptoDigestAlgorithm.SHA256,
-        base64,
-        { encoding: ExpoCrypto.CryptoEncoding.BASE64 }
-      );
-
-      // digestStringAsync with BASE64 encoding returns base64-encoded hash
-      // We need to convert it to hex
-      const hashBytes = Uint8Array.from(atob(hash), c => c.charCodeAt(0));
-      const hexHash = Array.from(hashBytes)
-        .map(b => b.toString(16).padStart(2, '0'))
-        .join('');
-
-      if (__DEV__) {
-        console.log('[OTAUpdate] Hash calculated:', hexHash);
-      }
-
-      return hexHash;
-    }
-
     if (ExpoCrypto?.digest) {
-      // Read file as base64 and convert to Uint8Array
+      // Read file as base64 and convert to Uint8Array for hashing
       const base64 = await ExpoFileSystem.readAsStringAsync(path, {
         encoding: ExpoFileSystem.EncodingType.Base64,
       });
@@ -218,15 +186,23 @@ class ExpoStorageAdapter implements StorageAdapter {
         console.log('[OTAUpdate] File read as base64, length:', base64.length);
       }
 
+      // Decode base64 to binary - this is what the server hashes
       const binary = atob(base64);
       const bytes = new Uint8Array(binary.length);
       for (let i = 0; i < binary.length; i++) {
         bytes[i] = binary.charCodeAt(i);
       }
+
+      if (__DEV__) {
+        console.log('[OTAUpdate] Decoded to binary, length:', bytes.length);
+      }
+
+      // Hash the binary data
       const hashBuffer = await ExpoCrypto.digest(
         ExpoCrypto.CryptoDigestAlgorithm.SHA256,
         bytes
       );
+
       // Convert ArrayBuffer to hex
       const hashBytes = new Uint8Array(hashBuffer);
       const hexHash = Array.from(hashBytes)
