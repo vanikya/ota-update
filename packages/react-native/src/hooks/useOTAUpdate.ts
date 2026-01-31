@@ -62,6 +62,25 @@ async function getDeviceId(): Promise<string> {
   return id;
 }
 
+// Timeout wrapper for async operations
+function withTimeout<T>(promise: Promise<T>, timeoutMs: number, operation: string): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => {
+      reject(new Error(`${operation} timed out after ${timeoutMs}ms`));
+    }, timeoutMs);
+
+    promise
+      .then((result) => {
+        clearTimeout(timer);
+        resolve(result);
+      })
+      .catch((error) => {
+        clearTimeout(timer);
+        reject(error);
+      });
+  });
+}
+
 export function useOTAUpdate(config: OTAUpdateConfig): UseOTAUpdateResult {
   const {
     serverUrl,
@@ -178,7 +197,21 @@ export function useOTAUpdate(config: OTAUpdateConfig): UseOTAUpdateResult {
       });
 
       // Download bundle directly to file (bypasses JS memory - critical for large bundles)
-      const downloadResult = await storage.current.downloadBundleToFile(release.bundleUrl, release.id);
+      // Use a 5 minute timeout for large bundles on slow networks
+      if (__DEV__) {
+        console.log(`[OTAUpdate] Starting download from: ${release.bundleUrl}`);
+        console.log(`[OTAUpdate] Expected size: ${release.bundleSize} bytes`);
+      }
+
+      const downloadResult = await withTimeout(
+        storage.current.downloadBundleToFile(release.bundleUrl, release.id),
+        5 * 60 * 1000, // 5 minute timeout
+        'Bundle download'
+      );
+
+      if (__DEV__) {
+        console.log(`[OTAUpdate] Download complete: ${downloadResult.fileSize} bytes`);
+      }
 
       setDownloadProgress({
         downloadedBytes: downloadResult.fileSize,
@@ -189,9 +222,23 @@ export function useOTAUpdate(config: OTAUpdateConfig): UseOTAUpdateResult {
       // Verify bundle hash
       setStatus('verifying');
 
+      if (__DEV__) {
+        console.log('[OTAUpdate] Calculating bundle hash...');
+      }
+
       // Calculate hash from file (streaming to avoid memory issues)
-      const actualHash = await storage.current.calculateBundleHash(release.id);
+      // Use a 2 minute timeout for hash calculation
+      const actualHash = await withTimeout(
+        storage.current.calculateBundleHash(release.id),
+        2 * 60 * 1000, // 2 minute timeout
+        'Hash calculation'
+      );
       const expectedHashWithoutPrefix = release.bundleHash.replace(/^sha256:/, '');
+
+      if (__DEV__) {
+        console.log(`[OTAUpdate] Expected hash: ${expectedHashWithoutPrefix}`);
+        console.log(`[OTAUpdate] Actual hash: ${actualHash}`);
+      }
 
       if (actualHash !== expectedHashWithoutPrefix) {
         // Delete corrupted bundle

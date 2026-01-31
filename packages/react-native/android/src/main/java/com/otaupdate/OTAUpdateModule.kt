@@ -2,6 +2,8 @@ package com.otaupdate
 
 import android.content.Context
 import android.content.SharedPreferences
+import android.os.Handler
+import android.os.Looper
 import android.util.Base64
 import com.facebook.react.bridge.*
 import java.io.File
@@ -10,12 +12,19 @@ import java.io.InputStream
 import java.net.HttpURLConnection
 import java.net.URL
 import java.security.MessageDigest
+import java.util.concurrent.Executors
 
 class OTAUpdateModule(reactContext: ReactApplicationContext) : ReactContextBaseJavaModule(reactContext) {
 
     private val prefs: SharedPreferences by lazy {
         reactContext.getSharedPreferences("OTAUpdate", Context.MODE_PRIVATE)
     }
+
+    // Use a thread pool for background operations instead of raw threads
+    private val executor = Executors.newFixedThreadPool(2)
+
+    // Handler to post results back to the main thread
+    private val mainHandler = Handler(Looper.getMainLooper())
 
     override fun getName(): String = "OTAUpdate"
 
@@ -100,24 +109,32 @@ class OTAUpdateModule(reactContext: ReactApplicationContext) : ReactContextBaseJ
     // This is critical for large bundles (5MB+)
     @ReactMethod
     fun downloadFile(urlString: String, destPath: String, promise: Promise) {
-        Thread {
+        executor.execute {
             var connection: HttpURLConnection? = null
             var inputStream: InputStream? = null
             var outputStream: FileOutputStream? = null
 
             try {
+                android.util.Log.d("OTAUpdate", "Starting download from: $urlString to: $destPath")
+
                 val url = URL(urlString)
                 connection = url.openConnection() as HttpURLConnection
                 connection.connectTimeout = 30000
-                connection.readTimeout = 60000
+                connection.readTimeout = 120000 // Increased read timeout for large files
                 connection.requestMethod = "GET"
+                connection.setRequestProperty("Accept-Encoding", "identity") // Disable compression for reliable streaming
                 connection.connect()
 
                 val responseCode = connection.responseCode
                 if (responseCode != HttpURLConnection.HTTP_OK) {
-                    promise.reject("DOWNLOAD_ERROR", "Download failed with status $responseCode")
-                    return@Thread
+                    val errorMsg = "Download failed with status $responseCode"
+                    android.util.Log.e("OTAUpdate", errorMsg)
+                    mainHandler.post { promise.reject("DOWNLOAD_ERROR", errorMsg) }
+                    return@execute
                 }
+
+                val contentLength = connection.contentLengthLong
+                android.util.Log.d("OTAUpdate", "Content-Length: $contentLength bytes")
 
                 // Ensure parent directory exists
                 val destFile = File(destPath)
@@ -137,22 +154,36 @@ class OTAUpdateModule(reactContext: ReactApplicationContext) : ReactContextBaseJ
 
                 outputStream.flush()
 
+                // Verify written file size
+                val writtenSize = destFile.length()
+                android.util.Log.d("OTAUpdate", "Download complete: $totalBytesRead bytes read, $writtenSize bytes written")
+
+                if (contentLength > 0 && writtenSize != contentLength) {
+                    val errorMsg = "File size mismatch: expected $contentLength, got $writtenSize"
+                    android.util.Log.e("OTAUpdate", errorMsg)
+                    destFile.delete()
+                    mainHandler.post { promise.reject("DOWNLOAD_ERROR", errorMsg) }
+                    return@execute
+                }
+
                 val result = Arguments.createMap()
                 result.putDouble("fileSize", totalBytesRead.toDouble())
-                promise.resolve(result)
+                // Resolve promise on main thread to avoid React Native bridge issues
+                mainHandler.post { promise.resolve(result) }
 
             } catch (e: Exception) {
-                promise.reject("DOWNLOAD_ERROR", "Failed to download file: ${e.message}", e)
+                android.util.Log.e("OTAUpdate", "Download failed: ${e.message}", e)
+                mainHandler.post { promise.reject("DOWNLOAD_ERROR", "Failed to download file: ${e.message}", e) }
             } finally {
                 try {
                     inputStream?.close()
                     outputStream?.close()
                     connection?.disconnect()
                 } catch (e: Exception) {
-                    // Ignore cleanup errors
+                    android.util.Log.w("OTAUpdate", "Error during cleanup: ${e.message}")
                 }
             }
-        }.start()
+        }
     }
 
     // Cryptography
@@ -174,13 +205,15 @@ class OTAUpdateModule(reactContext: ReactApplicationContext) : ReactContextBaseJ
     // Critical for large bundles (5MB+)
     @ReactMethod
     fun calculateSHA256FromFile(filePath: String, promise: Promise) {
-        Thread {
+        executor.execute {
             try {
                 val file = File(filePath)
                 if (!file.exists()) {
-                    promise.reject("FILE_ERROR", "File not found: $filePath")
-                    return@Thread
+                    mainHandler.post { promise.reject("FILE_ERROR", "File not found: $filePath") }
+                    return@execute
                 }
+
+                android.util.Log.d("OTAUpdate", "Calculating hash for: $filePath (${file.length()} bytes)")
 
                 val digest = MessageDigest.getInstance("SHA-256")
                 val buffer = ByteArray(8192) // 8KB buffer
@@ -194,11 +227,14 @@ class OTAUpdateModule(reactContext: ReactApplicationContext) : ReactContextBaseJ
 
                 val hash = digest.digest()
                 val hexString = hash.joinToString("") { "%02x".format(it) }
-                promise.resolve(hexString)
+                android.util.Log.d("OTAUpdate", "Hash calculated: $hexString")
+                // Resolve promise on main thread
+                mainHandler.post { promise.resolve(hexString) }
             } catch (e: Exception) {
-                promise.reject("HASH_ERROR", "Failed to calculate hash: ${e.message}", e)
+                android.util.Log.e("OTAUpdate", "Hash calculation failed: ${e.message}", e)
+                mainHandler.post { promise.reject("HASH_ERROR", "Failed to calculate hash: ${e.message}", e) }
             }
-        }.start()
+        }
     }
 
     @ReactMethod
@@ -248,20 +284,50 @@ class OTAUpdateModule(reactContext: ReactApplicationContext) : ReactContextBaseJ
             android.util.Log.d("OTAUpdate", "Applying bundle: $bundlePath (${bundleFile.length()} bytes)")
 
             // Store the bundle path for next launch
-            prefs.edit().putString("BundlePath", bundlePath).apply()
+            // CRITICAL: Use commit() instead of apply() to ensure synchronous write
+            // This prevents a race condition where the app kills before the write completes
+            val success = prefs.edit().putString("BundlePath", bundlePath).commit()
+            if (!success) {
+                android.util.Log.e("OTAUpdate", "Failed to save bundle path to SharedPreferences")
+                promise.reject("APPLY_ERROR", "Failed to save bundle path")
+                return
+            }
+            android.util.Log.d("OTAUpdate", "Bundle path saved to SharedPreferences: $bundlePath")
 
-            if (restart) {
-                // Restart the app
-                val context = reactApplicationContext
-                val intent = context.packageManager.getLaunchIntentForPackage(context.packageName)
-                intent?.addFlags(android.content.Intent.FLAG_ACTIVITY_CLEAR_TOP)
-                intent?.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
-                context.startActivity(intent)
-                android.os.Process.killProcess(android.os.Process.myPid())
+            // Verify the path was actually saved
+            val savedPath = prefs.getString("BundlePath", null)
+            if (savedPath != bundlePath) {
+                android.util.Log.e("OTAUpdate", "Bundle path verification failed: expected $bundlePath, got $savedPath")
+                promise.reject("APPLY_ERROR", "Bundle path verification failed")
+                return
             }
 
-            promise.resolve(null)
+            if (restart) {
+                android.util.Log.d("OTAUpdate", "Restarting app to apply bundle...")
+
+                // Resolve promise before restarting so JS knows it succeeded
+                promise.resolve(null)
+
+                // Give a small delay to ensure the promise is sent back to JS
+                mainHandler.postDelayed({
+                    // Restart the app
+                    val context = reactApplicationContext
+                    val intent = context.packageManager.getLaunchIntentForPackage(context.packageName)
+                    intent?.addFlags(android.content.Intent.FLAG_ACTIVITY_CLEAR_TOP)
+                    intent?.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+                    intent?.addFlags(android.content.Intent.FLAG_ACTIVITY_CLEAR_TASK)
+                    context.startActivity(intent)
+
+                    // Small delay before killing to allow activity to start
+                    mainHandler.postDelayed({
+                        android.os.Process.killProcess(android.os.Process.myPid())
+                    }, 100)
+                }, 100)
+            } else {
+                promise.resolve(null)
+            }
         } catch (e: Exception) {
+            android.util.Log.e("OTAUpdate", "Failed to apply bundle: ${e.message}", e)
             promise.reject("APPLY_ERROR", "Failed to apply bundle: ${e.message}", e)
         }
     }
@@ -274,7 +340,8 @@ class OTAUpdateModule(reactContext: ReactApplicationContext) : ReactContextBaseJ
 
     @ReactMethod
     fun clearPendingBundle(promise: Promise) {
-        prefs.edit().remove("BundlePath").apply()
+        prefs.edit().remove("BundlePath").commit()
+        android.util.Log.d("OTAUpdate", "Pending bundle cleared")
         promise.resolve(null)
     }
 
@@ -289,6 +356,12 @@ class OTAUpdateModule(reactContext: ReactApplicationContext) : ReactContextBaseJ
             i += 2
         }
         return data
+    }
+
+    // Cleanup executor when module is destroyed
+    override fun onCatalystInstanceDestroy() {
+        super.onCatalystInstanceDestroy()
+        executor.shutdown()
     }
 
     companion object {

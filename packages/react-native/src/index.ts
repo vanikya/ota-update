@@ -2,6 +2,9 @@
 export { OTAProvider, useOTA, withOTA, UpdateBanner } from './OTAProvider';
 export type { OTAProviderProps, UpdateBannerProps } from './OTAProvider';
 
+// Debug component (for development/testing)
+export { OTADebugPanel } from './components/OTADebugPanel';
+
 // Hook export
 export { useOTAUpdate } from './hooks/useOTAUpdate';
 export type {
@@ -33,4 +36,4 @@ export {
 export type { VerificationResult } from './utils/verification';
 
 // Version info
-export const VERSION = '0.1.8';
+export const VERSION = '0.2.2';

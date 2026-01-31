@@ -130,7 +130,16 @@ class ExpoStorageAdapter implements StorageAdapter {
   async downloadToFile(url: string, destPath: string): Promise<{ fileSize: number }> {
     // Use Expo's downloadAsync which downloads directly to file
     // This bypasses JS memory entirely - critical for large bundles
+    if (__DEV__) {
+      console.log('[OTAUpdate] Expo: Starting download from:', url);
+      console.log('[OTAUpdate] Expo: Destination:', destPath);
+    }
+
     const result = await ExpoFileSystem.downloadAsync(url, destPath);
+
+    if (__DEV__) {
+      console.log('[OTAUpdate] Expo: Download status:', result.status);
+    }
 
     if (result.status !== 200) {
       throw new Error(`Download failed with status ${result.status}`);
@@ -138,7 +147,13 @@ class ExpoStorageAdapter implements StorageAdapter {
 
     // Get file size
     const info = await ExpoFileSystem.getInfoAsync(destPath);
-    return { fileSize: info.size || 0 };
+    const fileSize = (info as any).size || 0;
+
+    if (__DEV__) {
+      console.log('[OTAUpdate] Expo: Downloaded file size:', fileSize, 'bytes');
+    }
+
+    return { fileSize };
   }
 
   async calculateHashFromFile(path: string): Promise<string> {
@@ -151,11 +166,58 @@ class ExpoStorageAdapter implements StorageAdapter {
       // expo-crypto not available
     }
 
+    if (__DEV__) {
+      console.log('[OTAUpdate] Expo: Calculating hash for:', path);
+    }
+
+    // Get file info first to log size
+    const fileInfo = await ExpoFileSystem.getInfoAsync(path);
+    if (__DEV__ && fileInfo.exists) {
+      console.log('[OTAUpdate] File size:', (fileInfo as any).size, 'bytes');
+    }
+
+    if (ExpoCrypto?.digestStringAsync) {
+      // Use digestStringAsync which is more efficient for large files
+      // Read file as base64
+      const base64 = await ExpoFileSystem.readAsStringAsync(path, {
+        encoding: ExpoFileSystem.EncodingType.Base64,
+      });
+
+      if (__DEV__) {
+        console.log('[OTAUpdate] File read as base64, length:', base64.length);
+      }
+
+      // Use digestStringAsync with base64 encoding
+      const hash = await ExpoCrypto.digestStringAsync(
+        ExpoCrypto.CryptoDigestAlgorithm.SHA256,
+        base64,
+        { encoding: ExpoCrypto.CryptoEncoding.BASE64 }
+      );
+
+      // digestStringAsync with BASE64 encoding returns base64-encoded hash
+      // We need to convert it to hex
+      const hashBytes = Uint8Array.from(atob(hash), c => c.charCodeAt(0));
+      const hexHash = Array.from(hashBytes)
+        .map(b => b.toString(16).padStart(2, '0'))
+        .join('');
+
+      if (__DEV__) {
+        console.log('[OTAUpdate] Hash calculated:', hexHash);
+      }
+
+      return hexHash;
+    }
+
     if (ExpoCrypto?.digest) {
       // Read file as base64 and convert to Uint8Array
       const base64 = await ExpoFileSystem.readAsStringAsync(path, {
         encoding: ExpoFileSystem.EncodingType.Base64,
       });
+
+      if (__DEV__) {
+        console.log('[OTAUpdate] File read as base64, length:', base64.length);
+      }
+
       const binary = atob(base64);
       const bytes = new Uint8Array(binary.length);
       for (let i = 0; i < binary.length; i++) {
@@ -167,9 +229,15 @@ class ExpoStorageAdapter implements StorageAdapter {
       );
       // Convert ArrayBuffer to hex
       const hashBytes = new Uint8Array(hashBuffer);
-      return Array.from(hashBytes)
+      const hexHash = Array.from(hashBytes)
         .map(b => b.toString(16).padStart(2, '0'))
         .join('');
+
+      if (__DEV__) {
+        console.log('[OTAUpdate] Hash calculated:', hexHash);
+      }
+
+      return hexHash;
     }
 
     // Fallback to SubtleCrypto if available
@@ -264,12 +332,27 @@ class NativeStorageAdapter implements StorageAdapter {
 
     // Use native module's downloadFile method if available (preferred)
     if (OTAUpdateNative.downloadFile) {
+      if (__DEV__) {
+        console.log('[OTAUpdate] Native: Starting download from:', url);
+        console.log('[OTAUpdate] Native: Destination:', destPath);
+      }
+
       const result = await OTAUpdateNative.downloadFile(url, destPath);
-      return { fileSize: result.fileSize || 0 };
+      const fileSize = result.fileSize || 0;
+
+      if (__DEV__) {
+        console.log('[OTAUpdate] Native: Downloaded file size:', fileSize, 'bytes');
+      }
+
+      return { fileSize };
     }
 
     // Fallback: download via fetch and write in chunks
     // This is less efficient but works without native download support
+    if (__DEV__) {
+      console.log('[OTAUpdate] Native: Using fetch fallback for download');
+    }
+
     const response = await fetch(url);
     if (!response.ok) {
       throw new Error(`Download failed with status ${response.status}`);
@@ -278,6 +361,10 @@ class NativeStorageAdapter implements StorageAdapter {
     const data = await response.arrayBuffer();
     const base64 = arrayBufferToBase64(data);
     await OTAUpdateNative.writeFileBase64(destPath, base64);
+
+    if (__DEV__) {
+      console.log('[OTAUpdate] Native: Fallback download complete, size:', data.byteLength);
+    }
 
     return { fileSize: data.byteLength };
   }
@@ -289,12 +376,26 @@ class NativeStorageAdapter implements StorageAdapter {
 
     // Use native module's calculateSHA256FromFile if available (preferred - streams file)
     if (OTAUpdateNative.calculateSHA256FromFile) {
-      return OTAUpdateNative.calculateSHA256FromFile(path);
+      if (__DEV__) {
+        console.log('[OTAUpdate] Native: Calculating hash for:', path);
+      }
+
+      const hash = await OTAUpdateNative.calculateSHA256FromFile(path);
+
+      if (__DEV__) {
+        console.log('[OTAUpdate] Native: Hash calculated:', hash);
+      }
+
+      return hash;
     }
 
     // Fallback: read file as base64 and use the base64 hash method
     // This loads the file into memory, but is better than nothing
     if (OTAUpdateNative.calculateSHA256 && OTAUpdateNative.readFileBase64) {
+      if (__DEV__) {
+        console.log('[OTAUpdate] Native: Using fallback hash calculation (loads file into memory)');
+      }
+
       const base64 = await OTAUpdateNative.readFileBase64(path);
       return OTAUpdateNative.calculateSHA256(base64);
     }
