@@ -4,7 +4,7 @@ const { withMainApplication, withAppDelegate } = require('@expo/config-plugins')
  * OTA Update Expo Config Plugin
  *
  * This plugin modifies the native code to enable OTA bundle loading:
- * - Android: Overrides getJSBundleFile() in MainApplication.kt
+ * - Android: Overrides getJSBundleFile() in MainApplication.kt using OTAUpdateHelper
  * - iOS: Modifies bundleURL() in AppDelegate.swift
  *
  * The modifications check SharedPreferences (Android) / UserDefaults (iOS)
@@ -16,152 +16,122 @@ function withOTAUpdateAndroid(config) {
     let contents = config.modResults.contents;
 
     // Check if already modified
-    if (contents.includes('getJSBundleFile')) {
-      console.log('[OTAUpdate] Android: getJSBundleFile already present, skipping');
+    if (contents.includes('OTAUpdateHelper')) {
+      console.log('[OTAUpdate] Android: OTAUpdateHelper already present, skipping');
       return config;
     }
 
-    // Add imports if not present
-    if (!contents.includes('import android.content.SharedPreferences')) {
-      // Find the package declaration and add imports after it
-      const packageMatch = contents.match(/^package\s+[\w.]+\s*\n/m);
-      if (packageMatch) {
-        const insertPos = packageMatch.index + packageMatch[0].length;
-        const imports = `\nimport android.content.SharedPreferences\nimport java.io.File\n`;
-        contents = contents.slice(0, insertPos) + imports + contents.slice(insertPos);
+    // Add import for OTAUpdateHelper
+    const packageMatch = contents.match(/^package\s+[\w.]+\s*\n/m);
+    if (packageMatch) {
+      const insertPos = packageMatch.index + packageMatch[0].length;
+      // Check if import section exists
+      if (!contents.includes('import com.otaupdate.OTAUpdateHelper')) {
+        const importStatement = `\nimport com.otaupdate.OTAUpdateHelper\n`;
+        contents = contents.slice(0, insertPos) + importStatement + contents.slice(insertPos);
       }
     }
 
-    // Strategy 1: Look for "override val reactNativeHost" pattern (Expo SDK 50+)
-    // This is more reliable than matching getUseDeveloperSupport
-    const reactNativeHostPattern = /(override\s+val\s+reactNativeHost\s*:\s*ReactNativeHost\s*=\s*object\s*:\s*DefaultReactNativeHost\s*\(\s*this\s*\)\s*\{)/;
-
-    if (reactNativeHostPattern.test(contents)) {
-      const getJSBundleFileOverride = `
+    // The getJSBundleFile override that uses our helper
+    const getJSBundleFileOverride = `
       override fun getJSBundleFile(): String? {
-        val prefs: SharedPreferences = applicationContext.getSharedPreferences("OTAUpdate", android.content.Context.MODE_PRIVATE)
-        val bundlePath = prefs.getString("BundlePath", null)
-        android.util.Log.d("OTAUpdate", "getJSBundleFile called, stored path: $bundlePath")
-        if (bundlePath != null) {
-          val file = File(bundlePath)
-          if (file.exists() && file.canRead()) {
-            android.util.Log.d("OTAUpdate", "Loading OTA bundle: $bundlePath (${file.length()} bytes)")
-            return bundlePath
-          } else {
-            android.util.Log.w("OTAUpdate", "OTA bundle not found or not readable: $bundlePath, exists=${file.exists()}")
-          }
-        }
-        android.util.Log.d("OTAUpdate", "Loading default bundle")
-        return null
+        return OTAUpdateHelper.getJSBundleFile(applicationContext)
       }
 `;
+
+    // Strategy 1: Look for "object : DefaultReactNativeHost" pattern
+    // This handles most Expo SDK 50+ apps
+    const defaultHostPattern = /(object\s*:\s*DefaultReactNativeHost\s*\([^)]*\)\s*\{)/;
+
+    if (defaultHostPattern.test(contents)) {
+      contents = contents.replace(
+        defaultHostPattern,
+        `$1${getJSBundleFileOverride}`
+      );
+      console.log('[OTAUpdate] Android: Successfully injected getJSBundleFile (DefaultReactNativeHost pattern)');
+      config.modResults.contents = contents;
+      return config;
+    }
+
+    // Strategy 2: Look for "override val reactNativeHost" with object block
+    const reactNativeHostPattern = /(override\s+val\s+reactNativeHost[^=]*=\s*object[^{]*\{)/;
+
+    if (reactNativeHostPattern.test(contents)) {
       contents = contents.replace(
         reactNativeHostPattern,
         `$1${getJSBundleFileOverride}`
       );
-      console.log('[OTAUpdate] Android: Successfully injected getJSBundleFile (pattern 1)');
+      console.log('[OTAUpdate] Android: Successfully injected getJSBundleFile (reactNativeHost pattern)');
       config.modResults.contents = contents;
       return config;
     }
 
-    // Strategy 2: Look for DefaultReactNativeHost with different formatting
-    const altPattern = /(object\s*:\s*DefaultReactNativeHost\s*\(\s*this\s*\)\s*\{)/;
+    // Strategy 3: Look for any ReactNativeHost object block
+    const anyHostPattern = /(ReactNativeHost\s*\([^)]*\)\s*\{)/;
 
-    if (altPattern.test(contents)) {
-      const getJSBundleFileOverride = `
-      override fun getJSBundleFile(): String? {
-        val prefs: SharedPreferences = applicationContext.getSharedPreferences("OTAUpdate", android.content.Context.MODE_PRIVATE)
-        val bundlePath = prefs.getString("BundlePath", null)
-        android.util.Log.d("OTAUpdate", "getJSBundleFile called, stored path: $bundlePath")
-        if (bundlePath != null) {
-          val file = File(bundlePath)
-          if (file.exists() && file.canRead()) {
-            android.util.Log.d("OTAUpdate", "Loading OTA bundle: $bundlePath (${file.length()} bytes)")
-            return bundlePath
-          } else {
-            android.util.Log.w("OTAUpdate", "OTA bundle not found or not readable: $bundlePath, exists=${file.exists()}")
-          }
-        }
-        android.util.Log.d("OTAUpdate", "Loading default bundle")
-        return null
-      }
-`;
+    if (anyHostPattern.test(contents)) {
       contents = contents.replace(
-        altPattern,
+        anyHostPattern,
         `$1${getJSBundleFileOverride}`
       );
-      console.log('[OTAUpdate] Android: Successfully injected getJSBundleFile (pattern 2)');
+      console.log('[OTAUpdate] Android: Successfully injected getJSBundleFile (generic ReactNativeHost pattern)');
       config.modResults.contents = contents;
       return config;
     }
 
-    // Strategy 3: Look for getUseDeveloperSupport with flexible whitespace
-    const devSupportPattern = /(override\s+fun\s+getUseDeveloperSupport\s*\(\s*\)\s*[:\s]*Boolean\s*[=\{])/;
+    // Strategy 4: Find the class and look for the host definition more flexibly
+    // Look for "override fun getUseDeveloperSupport" and insert before it
+    const devSupportPattern = /([\t ]*)(override\s+fun\s+getUseDeveloperSupport)/;
 
     if (devSupportPattern.test(contents)) {
-      const getJSBundleFileOverride = `override fun getJSBundleFile(): String? {
-        val prefs: SharedPreferences = applicationContext.getSharedPreferences("OTAUpdate", android.content.Context.MODE_PRIVATE)
-        val bundlePath = prefs.getString("BundlePath", null)
-        android.util.Log.d("OTAUpdate", "getJSBundleFile called, stored path: $bundlePath")
-        if (bundlePath != null) {
-          val file = File(bundlePath)
-          if (file.exists() && file.canRead()) {
-            android.util.Log.d("OTAUpdate", "Loading OTA bundle: $bundlePath (${file.length()} bytes)")
-            return bundlePath
-          } else {
-            android.util.Log.w("OTAUpdate", "OTA bundle not found or not readable: $bundlePath, exists=${file.exists()}")
-          }
-        }
-        android.util.Log.d("OTAUpdate", "Loading default bundle")
-        return null
-      }
-
-      `;
+      const indentMatch = contents.match(devSupportPattern);
+      const indent = indentMatch ? indentMatch[1] : '      ';
+      const overrideCode = `${indent}override fun getJSBundleFile(): String? {\n${indent}  return OTAUpdateHelper.getJSBundleFile(applicationContext)\n${indent}}\n\n${indent}`;
       contents = contents.replace(
         devSupportPattern,
-        `${getJSBundleFileOverride}$1`
+        `${overrideCode}$2`
       );
-      console.log('[OTAUpdate] Android: Successfully injected getJSBundleFile (pattern 3)');
+      console.log('[OTAUpdate] Android: Successfully injected getJSBundleFile (before getUseDeveloperSupport)');
       config.modResults.contents = contents;
       return config;
     }
 
-    // Strategy 4: Look for ReactNativeHost in any form
-    const genericPattern = /(ReactNativeHost\s*[\(\{])/;
+    // Strategy 5: Last resort - find any class with Application and inject
+    // Look for the ReactApplication interface implementation
+    const reactAppPattern = /(class\s+\w+\s*:\s*Application\s*\(\s*\)\s*,\s*ReactApplication\s*\{)/;
 
-    if (genericPattern.test(contents)) {
-      // Find the opening brace after ReactNativeHost and insert after it
-      const match = contents.match(/ReactNativeHost[^{]*\{/);
-      if (match) {
-        const insertPos = match.index + match[0].length;
-        const getJSBundleFileOverride = `
-      override fun getJSBundleFile(): String? {
-        val prefs: SharedPreferences = applicationContext.getSharedPreferences("OTAUpdate", android.content.Context.MODE_PRIVATE)
-        val bundlePath = prefs.getString("BundlePath", null)
-        android.util.Log.d("OTAUpdate", "getJSBundleFile called, stored path: $bundlePath")
-        if (bundlePath != null) {
-          val file = File(bundlePath)
-          if (file.exists() && file.canRead()) {
-            android.util.Log.d("OTAUpdate", "Loading OTA bundle: $bundlePath (${file.length()} bytes)")
-            return bundlePath
-          } else {
-            android.util.Log.w("OTAUpdate", "OTA bundle not found or not readable: $bundlePath, exists=${file.exists()}")
-          }
-        }
-        android.util.Log.d("OTAUpdate", "Loading default bundle")
-        return null
-      }
+    if (reactAppPattern.test(contents)) {
+      // Find where to inject - after the class opening
+      const classMatch = contents.match(reactAppPattern);
+      if (classMatch) {
+        const insertPos = classMatch.index + classMatch[0].length;
+        const helperComment = `
+  // OTA Update: Override to load OTA bundle if available
+  private fun getOTABundleFile(): String? {
+    return OTAUpdateHelper.getJSBundleFile(applicationContext)
+  }
 `;
-        contents = contents.slice(0, insertPos) + getJSBundleFileOverride + contents.slice(insertPos);
-        console.log('[OTAUpdate] Android: Successfully injected getJSBundleFile (pattern 4)');
-        config.modResults.contents = contents;
-        return config;
+        contents = contents.slice(0, insertPos) + helperComment + contents.slice(insertPos);
+        console.log('[OTAUpdate] Android: Added OTA helper method to Application class');
+        console.log('[OTAUpdate] Android: WARNING - You may need to manually wire getJSBundleFile() override');
       }
     }
 
-    console.warn('[OTAUpdate] Android: Could not find suitable injection point for getJSBundleFile');
-    console.warn('[OTAUpdate] Android: Please manually add getJSBundleFile override to MainApplication.kt');
+    // Log the current MainApplication structure for debugging
+    console.warn('[OTAUpdate] Android: Could not find standard injection point');
+    console.warn('[OTAUpdate] Android: Please ensure your MainApplication.kt has a ReactNativeHost definition');
+    console.warn('[OTAUpdate] Android: You may need to manually add the getJSBundleFile override');
     console.warn('[OTAUpdate] Android: See https://vanikya.github.io/ota-update/ for manual setup instructions');
+
+    // Log first 100 lines for debugging
+    const lines = contents.split('\n').slice(0, 100);
+    console.log('[OTAUpdate] Android: First 100 lines of MainApplication.kt:');
+    lines.forEach((line, i) => {
+      if (line.includes('ReactNativeHost') || line.includes('DefaultReactNativeHost') ||
+          line.includes('getJSBundleFile') || line.includes('override')) {
+        console.log(`  ${i + 1}: ${line}`);
+      }
+    });
 
     config.modResults.contents = contents;
     return config;
@@ -196,6 +166,8 @@ function withOTAUpdateIOS(config) {
         return URL(fileURLWithPath: path)
       } else {
         NSLog("[OTAUpdate] OTA bundle not found at path: %@", path)
+        // Clear invalid path
+        UserDefaults.standard.removeObject(forKey: "OTAUpdateBundlePath")
       }
     }
     NSLog("[OTAUpdate] Loading default bundle")
@@ -204,14 +176,12 @@ function withOTAUpdateIOS(config) {
 `;
 
       // Strategy 1: Look for bundleURL() with flexible pattern
-      // Match: func bundleURL() -> URL? { ... } with any content inside
       const bundleURLPattern1 = /(func\s+bundleURL\s*\(\s*\)\s*->\s*URL\?\s*\{)([\s\S]*?)(\n\s*\})/;
 
       if (bundleURLPattern1.test(contents)) {
         contents = contents.replace(
           bundleURLPattern1,
           (match, funcStart, funcBody, funcEnd) => {
-            // Check if it already has OTA check
             if (funcBody.includes('getOTABundleURL')) {
               return match;
             }
@@ -291,8 +261,10 @@ ${helperFunction}
   // Check for OTA bundle
   NSString *bundlePath = [[NSUserDefaults standardUserDefaults] stringForKey:@"OTAUpdateBundlePath"];
   if (bundlePath && [[NSFileManager defaultManager] fileExistsAtPath:bundlePath]) {
+    NSLog(@"[OTAUpdate] Loading OTA bundle: %@", bundlePath);
     return [NSURL fileURLWithPath:bundlePath];
   }
+  NSLog(@"[OTAUpdate] Loading default bundle");
 `;
         contents = contents.replace(
           sourceURLPattern,
