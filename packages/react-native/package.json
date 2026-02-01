@@ -1,6 +1,6 @@
 {
   "name": "@vanikya/ota-react-native",
-  "version": "0.2.7",
+  "version": "0.2.8",
   "description": "OTA Update SDK for React Native apps - self-hosted CodePush/EAS Updates alternative",
   "main": "lib/commonjs/index.js",
   "module": "lib/module/index.js",

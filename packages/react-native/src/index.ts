@@ -36,4 +36,4 @@ export {
 export type { VerificationResult } from './utils/verification';
 
 // Version info
-export const VERSION = '0.2.7';
+export const VERSION = '0.2.8';
