@@ -4,11 +4,11 @@ const { withMainApplication, withAppDelegate } = require('@expo/config-plugins')
  * OTA Update Expo Config Plugin
  *
  * This plugin modifies the native code to enable OTA bundle loading:
- * - Android: Overrides getJSBundleFile() in MainApplication.kt using OTAUpdateHelper
+ * - Android: Overrides getJSBundleFile() or sets jsBundleFilePath in MainApplication.kt
  * - iOS: Modifies bundleURL() in AppDelegate.swift
  *
- * The modifications check SharedPreferences (Android) / UserDefaults (iOS)
- * for a pending OTA bundle path and load it instead of the default bundle.
+ * Supports both old architecture (getJSBundleFile override) and
+ * new architecture (jsBundleFilePath parameter in getDefaultReactHost).
  */
 
 function withOTAUpdateAndroid(config) {
@@ -16,122 +16,152 @@ function withOTAUpdateAndroid(config) {
     let contents = config.modResults.contents;
 
     // Check if already modified
-    if (contents.includes('OTAUpdateHelper')) {
+    if (contents.includes('OTAUpdateHelper') || contents.includes('com.otaupdate')) {
       console.log('[OTAUpdate] Android: OTAUpdateHelper already present, skipping');
       return config;
     }
 
-    // Add import for OTAUpdateHelper
+    console.log('[OTAUpdate] Android: Analyzing MainApplication.kt structure...');
+
+    // Add import for OTAUpdateHelper at the top
     const packageMatch = contents.match(/^package\s+[\w.]+\s*\n/m);
     if (packageMatch) {
       const insertPos = packageMatch.index + packageMatch[0].length;
-      // Check if import section exists
-      if (!contents.includes('import com.otaupdate.OTAUpdateHelper')) {
-        const importStatement = `\nimport com.otaupdate.OTAUpdateHelper\n`;
-        contents = contents.slice(0, insertPos) + importStatement + contents.slice(insertPos);
+      const importStatement = `\nimport com.otaupdate.OTAUpdateHelper\n`;
+      contents = contents.slice(0, insertPos) + importStatement + contents.slice(insertPos);
+      console.log('[OTAUpdate] Android: Added import for OTAUpdateHelper');
+    }
+
+    let injected = false;
+
+    // ============================================================
+    // Strategy 1: React Native 0.82+ NEW ARCHITECTURE
+    // Look for: getDefaultReactHost(applicationContext, ...) and add jsBundleFilePath parameter
+    // ============================================================
+    const newArchPattern = /getDefaultReactHost\s*\(\s*\n?\s*applicationContext\s*,/;
+    if (newArchPattern.test(contents)) {
+      console.log('[OTAUpdate] Android: Detected React Native 0.82+ (new architecture)');
+
+      // Find the getDefaultReactHost call and add jsBundleFilePath parameter
+      // Pattern: getDefaultReactHost(applicationContext, packageList, ...)
+      const reactHostRegex = /(getDefaultReactHost\s*\(\s*\n?\s*)(applicationContext)(\s*,)/g;
+
+      if (reactHostRegex.test(contents)) {
+        contents = contents.replace(
+          /(getDefaultReactHost\s*\(\s*\n?\s*)(applicationContext)(\s*,)/,
+          '$1$2$3\n        jsBundleFilePath = OTAUpdateHelper.getJSBundleFile(applicationContext),'
+        );
+        console.log('[OTAUpdate] Android: Injected jsBundleFilePath parameter (new architecture)');
+        injected = true;
       }
     }
 
-    // The getJSBundleFile override that uses our helper
-    const getJSBundleFileOverride = `
-      override fun getJSBundleFile(): String? {
-        return OTAUpdateHelper.getJSBundleFile(applicationContext)
+    // ============================================================
+    // Strategy 2: Look for reactHost with getDefaultReactHost
+    // override val reactHost: ReactHost get() = getDefaultReactHost(...)
+    // ============================================================
+    if (!injected) {
+      const reactHostGetPattern = /(override\s+val\s+reactHost\s*:\s*ReactHost\s+get\s*\(\s*\)\s*=\s*getDefaultReactHost\s*\()([^)]*)\)/;
+      if (reactHostGetPattern.test(contents)) {
+        console.log('[OTAUpdate] Android: Detected reactHost with getDefaultReactHost');
+
+        contents = contents.replace(
+          reactHostGetPattern,
+          (match, prefix, params) => {
+            if (params.includes('jsBundleFilePath')) {
+              return match; // Already has it
+            }
+            // Add jsBundleFilePath to the parameters
+            const newParams = params.trim() + ',\n        jsBundleFilePath = OTAUpdateHelper.getJSBundleFile(applicationContext)';
+            return `${prefix}${newParams})`;
+          }
+        );
+        console.log('[OTAUpdate] Android: Injected jsBundleFilePath in reactHost getter');
+        injected = true;
       }
+    }
+
+    // ============================================================
+    // Strategy 3: Old architecture - DefaultReactNativeHost with object block
+    // Look for: object : DefaultReactNativeHost(this) { ... }
+    // ============================================================
+    if (!injected) {
+      const defaultHostPattern = /(object\s*:\s*DefaultReactNativeHost\s*\([^)]*\)\s*\{)/;
+      if (defaultHostPattern.test(contents)) {
+        console.log('[OTAUpdate] Android: Detected DefaultReactNativeHost (old architecture)');
+
+        const getJSBundleFileOverride = `
+        override fun getJSBundleFile(): String? {
+          return OTAUpdateHelper.getJSBundleFile(applicationContext)
+        }
 `;
-
-    // Strategy 1: Look for "object : DefaultReactNativeHost" pattern
-    // This handles most Expo SDK 50+ apps
-    const defaultHostPattern = /(object\s*:\s*DefaultReactNativeHost\s*\([^)]*\)\s*\{)/;
-
-    if (defaultHostPattern.test(contents)) {
-      contents = contents.replace(
-        defaultHostPattern,
-        `$1${getJSBundleFileOverride}`
-      );
-      console.log('[OTAUpdate] Android: Successfully injected getJSBundleFile (DefaultReactNativeHost pattern)');
-      config.modResults.contents = contents;
-      return config;
+        contents = contents.replace(defaultHostPattern, `$1${getJSBundleFileOverride}`);
+        console.log('[OTAUpdate] Android: Injected getJSBundleFile override');
+        injected = true;
+      }
     }
 
-    // Strategy 2: Look for "override val reactNativeHost" with object block
-    const reactNativeHostPattern = /(override\s+val\s+reactNativeHost[^=]*=\s*object[^{]*\{)/;
+    // ============================================================
+    // Strategy 4: Look for override fun getUseDeveloperSupport and insert before it
+    // ============================================================
+    if (!injected) {
+      const devSupportPattern = /([ \t]*)(override\s+fun\s+getUseDeveloperSupport\s*\(\s*\))/;
+      if (devSupportPattern.test(contents)) {
+        console.log('[OTAUpdate] Android: Found getUseDeveloperSupport, inserting before it');
 
-    if (reactNativeHostPattern.test(contents)) {
-      contents = contents.replace(
-        reactNativeHostPattern,
-        `$1${getJSBundleFileOverride}`
-      );
-      console.log('[OTAUpdate] Android: Successfully injected getJSBundleFile (reactNativeHost pattern)');
-      config.modResults.contents = contents;
-      return config;
+        const match = contents.match(devSupportPattern);
+        const indent = match ? match[1] : '        ';
+
+        const getJSBundleFileOverride = `${indent}override fun getJSBundleFile(): String? {
+${indent}  return OTAUpdateHelper.getJSBundleFile(applicationContext)
+${indent}}
+
+${indent}`;
+
+        contents = contents.replace(devSupportPattern, `${getJSBundleFileOverride}$2`);
+        console.log('[OTAUpdate] Android: Injected getJSBundleFile before getUseDeveloperSupport');
+        injected = true;
+      }
     }
 
-    // Strategy 3: Look for any ReactNativeHost object block
-    const anyHostPattern = /(ReactNativeHost\s*\([^)]*\)\s*\{)/;
+    // ============================================================
+    // Strategy 5: Look for ReactNativeHost in any form
+    // ============================================================
+    if (!injected) {
+      const anyHostPattern = /(:\s*ReactNativeHost\s*\{)/;
+      if (anyHostPattern.test(contents)) {
+        console.log('[OTAUpdate] Android: Found ReactNativeHost block');
 
-    if (anyHostPattern.test(contents)) {
-      contents = contents.replace(
-        anyHostPattern,
-        `$1${getJSBundleFileOverride}`
-      );
-      console.log('[OTAUpdate] Android: Successfully injected getJSBundleFile (generic ReactNativeHost pattern)');
-      config.modResults.contents = contents;
-      return config;
-    }
-
-    // Strategy 4: Find the class and look for the host definition more flexibly
-    // Look for "override fun getUseDeveloperSupport" and insert before it
-    const devSupportPattern = /([\t ]*)(override\s+fun\s+getUseDeveloperSupport)/;
-
-    if (devSupportPattern.test(contents)) {
-      const indentMatch = contents.match(devSupportPattern);
-      const indent = indentMatch ? indentMatch[1] : '      ';
-      const overrideCode = `${indent}override fun getJSBundleFile(): String? {\n${indent}  return OTAUpdateHelper.getJSBundleFile(applicationContext)\n${indent}}\n\n${indent}`;
-      contents = contents.replace(
-        devSupportPattern,
-        `${overrideCode}$2`
-      );
-      console.log('[OTAUpdate] Android: Successfully injected getJSBundleFile (before getUseDeveloperSupport)');
-      config.modResults.contents = contents;
-      return config;
-    }
-
-    // Strategy 5: Last resort - find any class with Application and inject
-    // Look for the ReactApplication interface implementation
-    const reactAppPattern = /(class\s+\w+\s*:\s*Application\s*\(\s*\)\s*,\s*ReactApplication\s*\{)/;
-
-    if (reactAppPattern.test(contents)) {
-      // Find where to inject - after the class opening
-      const classMatch = contents.match(reactAppPattern);
-      if (classMatch) {
-        const insertPos = classMatch.index + classMatch[0].length;
-        const helperComment = `
-  // OTA Update: Override to load OTA bundle if available
-  private fun getOTABundleFile(): String? {
-    return OTAUpdateHelper.getJSBundleFile(applicationContext)
-  }
+        const getJSBundleFileOverride = `
+        override fun getJSBundleFile(): String? {
+          return OTAUpdateHelper.getJSBundleFile(applicationContext)
+        }
 `;
-        contents = contents.slice(0, insertPos) + helperComment + contents.slice(insertPos);
-        console.log('[OTAUpdate] Android: Added OTA helper method to Application class');
-        console.log('[OTAUpdate] Android: WARNING - You may need to manually wire getJSBundleFile() override');
+        contents = contents.replace(anyHostPattern, `$1${getJSBundleFileOverride}`);
+        console.log('[OTAUpdate] Android: Injected getJSBundleFile in ReactNativeHost');
+        injected = true;
       }
     }
 
-    // Log the current MainApplication structure for debugging
-    console.warn('[OTAUpdate] Android: Could not find standard injection point');
-    console.warn('[OTAUpdate] Android: Please ensure your MainApplication.kt has a ReactNativeHost definition');
-    console.warn('[OTAUpdate] Android: You may need to manually add the getJSBundleFile override');
-    console.warn('[OTAUpdate] Android: See https://vanikya.github.io/ota-update/ for manual setup instructions');
+    if (!injected) {
+      console.warn('[OTAUpdate] Android: ⚠️ Could not find injection point!');
+      console.warn('[OTAUpdate] Android: Please manually add getJSBundleFile override');
+      console.warn('[OTAUpdate] Android: See documentation for manual setup');
 
-    // Log first 100 lines for debugging
-    const lines = contents.split('\n').slice(0, 100);
-    console.log('[OTAUpdate] Android: First 100 lines of MainApplication.kt:');
-    lines.forEach((line, i) => {
-      if (line.includes('ReactNativeHost') || line.includes('DefaultReactNativeHost') ||
-          line.includes('getJSBundleFile') || line.includes('override')) {
-        console.log(`  ${i + 1}: ${line}`);
-      }
-    });
+      // Log relevant lines for debugging
+      const lines = contents.split('\n');
+      console.log('[OTAUpdate] Android: Relevant lines in MainApplication.kt:');
+      lines.forEach((line, i) => {
+        if (line.includes('ReactNativeHost') ||
+            line.includes('DefaultReactNativeHost') ||
+            line.includes('getDefaultReactHost') ||
+            line.includes('reactHost') ||
+            line.includes('getJSBundleFile') ||
+            line.includes('jsBundleFilePath')) {
+          console.log(`  ${i + 1}: ${line.trim()}`);
+        }
+      });
+    }
 
     config.modResults.contents = contents;
     return config;
@@ -165,8 +195,7 @@ function withOTAUpdateIOS(config) {
         }
         return URL(fileURLWithPath: path)
       } else {
-        NSLog("[OTAUpdate] OTA bundle not found at path: %@", path)
-        // Clear invalid path
+        NSLog("[OTAUpdate] OTA bundle not found at path: %@, clearing", path)
         UserDefaults.standard.removeObject(forKey: "OTAUpdateBundlePath")
       }
     }
@@ -193,12 +222,12 @@ function withOTAUpdateIOS(config) {
 ${funcBody}${funcEnd}${helperFunction}`;
           }
         );
-        console.log('[OTAUpdate] iOS: Successfully modified bundleURL (pattern 1)');
+        console.log('[OTAUpdate] iOS: Successfully modified bundleURL');
         config.modResults.contents = contents;
         return config;
       }
 
-      // Strategy 2: Look for sourceURL(for bridge:) pattern (older Expo versions)
+      // Strategy 2: Look for sourceURL(for bridge:) pattern
       const sourceURLPattern = /(func\s+sourceURL\s*\(\s*for\s+bridge\s*:\s*RCTBridge\s*\)\s*->\s*URL\?\s*\{)([\s\S]*?)(\n\s*\})/;
 
       if (sourceURLPattern.test(contents)) {
@@ -216,49 +245,19 @@ ${funcBody}${funcEnd}${helperFunction}`;
 ${funcBody}${funcEnd}${helperFunction}`;
           }
         );
-        console.log('[OTAUpdate] iOS: Successfully modified sourceURL (pattern 2)');
+        console.log('[OTAUpdate] iOS: Successfully modified sourceURL');
         config.modResults.contents = contents;
         return config;
       }
 
-      // Strategy 3: Add bundleURL method if it doesn't exist but class exists
-      const appDelegateClassPattern = /(class\s+AppDelegate\s*[^{]*\{)/;
-
-      if (appDelegateClassPattern.test(contents) && !contents.includes('func bundleURL')) {
-        const newBundleURLMethod = `
-  // OTA Update: Bundle URL with OTA support
-  func bundleURL() -> URL? {
-    // Check for downloaded OTA bundle first
-    if let otaBundle = getOTABundleURL() {
-      return otaBundle
-    }
-    #if DEBUG
-    return RCTBundleURLProvider.sharedSettings().jsBundleURL(forBundleRoot: "index")
-    #else
-    return Bundle.main.url(forResource: "main", withExtension: "jsbundle")
-    #endif
-  }
-${helperFunction}
-`;
-        contents = contents.replace(
-          appDelegateClassPattern,
-          `$1${newBundleURLMethod}`
-        );
-        console.log('[OTAUpdate] iOS: Successfully added bundleURL method (pattern 3)');
-        config.modResults.contents = contents;
-        return config;
-      }
-
-      console.warn('[OTAUpdate] iOS: Could not find suitable injection point');
-      console.warn('[OTAUpdate] iOS: Please manually modify AppDelegate.swift');
-      console.warn('[OTAUpdate] iOS: See https://vanikya.github.io/ota-update/ for manual setup instructions');
+      console.warn('[OTAUpdate] iOS: Could not find bundleURL or sourceURL method');
     } else if (config.modResults.language === 'objc' || config.modResults.language === 'objcpp') {
-      // Objective-C AppDelegate (older Expo versions)
+      // Objective-C AppDelegate
       const sourceURLPattern = /(- \(NSURL \*\)sourceURLForBridge:\(RCTBridge \*\)bridge\s*\{)([\s\S]*?)(\n\})/;
 
       if (sourceURLPattern.test(contents)) {
         const helperCode = `
-  // Check for OTA bundle
+  // OTA Update: Check for OTA bundle
   NSString *bundlePath = [[NSUserDefaults standardUserDefaults] stringForKey:@"OTAUpdateBundlePath"];
   if (bundlePath && [[NSFileManager defaultManager] fileExistsAtPath:bundlePath]) {
     NSLog(@"[OTAUpdate] Loading OTA bundle: %@", bundlePath);
@@ -292,6 +291,5 @@ module.exports = function withOTAUpdate(config) {
   return config;
 };
 
-// Export individual functions for testing
 module.exports.withOTAUpdateAndroid = withOTAUpdateAndroid;
 module.exports.withOTAUpdateIOS = withOTAUpdateIOS;
