@@ -314,13 +314,8 @@ class OTAUpdateModule(reactContext: ReactApplicationContext) : ReactContextBaseJ
                     try {
                         // Use ProcessPhoenix for graceful app restart
                         // This properly kills the current process and starts a new one
-                        val activity = currentActivity
-                        if (activity != null) {
-                            ProcessPhoenix.triggerRebirth(activity)
-                        } else {
-                            // Fallback to context-based restart
-                            ProcessPhoenix.triggerRebirth(reactApplicationContext)
-                        }
+                        val context: android.content.Context = reactApplicationContext.applicationContext
+                        ProcessPhoenix.triggerRebirth(context)
                     } catch (e: Exception) {
                         android.util.Log.e("OTAUpdate", "ProcessPhoenix restart failed: ${e.message}, using fallback")
                         // Fallback to manual restart
@@ -361,12 +356,8 @@ class OTAUpdateModule(reactContext: ReactApplicationContext) : ReactContextBaseJ
         android.util.Log.d("OTAUpdate", "Reload requested...")
         mainHandler.postDelayed({
             try {
-                val activity = currentActivity
-                if (activity != null) {
-                    ProcessPhoenix.triggerRebirth(activity)
-                } else {
-                    ProcessPhoenix.triggerRebirth(reactApplicationContext)
-                }
+                val context: android.content.Context = reactApplicationContext.applicationContext
+                ProcessPhoenix.triggerRebirth(context)
             } catch (e: Exception) {
                 android.util.Log.e("OTAUpdate", "Reload failed: ${e.message}")
             }
