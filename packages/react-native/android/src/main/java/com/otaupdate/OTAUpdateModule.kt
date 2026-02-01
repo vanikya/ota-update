@@ -6,6 +6,7 @@ import android.os.Handler
 import android.os.Looper
 import android.util.Base64
 import com.facebook.react.bridge.*
+import com.jakewharton.processphoenix.ProcessPhoenix
 import java.io.File
 import java.io.FileOutputStream
 import java.io.InputStream
@@ -303,26 +304,35 @@ class OTAUpdateModule(reactContext: ReactApplicationContext) : ReactContextBaseJ
             }
 
             if (restart) {
-                android.util.Log.d("OTAUpdate", "Restarting app to apply bundle...")
+                android.util.Log.d("OTAUpdate", "Restarting app to apply bundle using ProcessPhoenix...")
 
                 // Resolve promise before restarting so JS knows it succeeded
                 promise.resolve(null)
 
                 // Give a small delay to ensure the promise is sent back to JS
                 mainHandler.postDelayed({
-                    // Restart the app
-                    val context = reactApplicationContext
-                    val intent = context.packageManager.getLaunchIntentForPackage(context.packageName)
-                    intent?.addFlags(android.content.Intent.FLAG_ACTIVITY_CLEAR_TOP)
-                    intent?.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
-                    intent?.addFlags(android.content.Intent.FLAG_ACTIVITY_CLEAR_TASK)
-                    context.startActivity(intent)
-
-                    // Small delay before killing to allow activity to start
-                    mainHandler.postDelayed({
+                    try {
+                        // Use ProcessPhoenix for graceful app restart
+                        // This properly kills the current process and starts a new one
+                        val activity = currentActivity
+                        if (activity != null) {
+                            ProcessPhoenix.triggerRebirth(activity)
+                        } else {
+                            // Fallback to context-based restart
+                            ProcessPhoenix.triggerRebirth(reactApplicationContext)
+                        }
+                    } catch (e: Exception) {
+                        android.util.Log.e("OTAUpdate", "ProcessPhoenix restart failed: ${e.message}, using fallback")
+                        // Fallback to manual restart
+                        val context = reactApplicationContext
+                        val intent = context.packageManager.getLaunchIntentForPackage(context.packageName)
+                        intent?.addFlags(android.content.Intent.FLAG_ACTIVITY_CLEAR_TOP)
+                        intent?.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+                        intent?.addFlags(android.content.Intent.FLAG_ACTIVITY_CLEAR_TASK)
+                        context.startActivity(intent)
                         android.os.Process.killProcess(android.os.Process.myPid())
-                    }, 100)
-                }, 100)
+                    }
+                }, 200)
             } else {
                 promise.resolve(null)
             }
@@ -343,6 +353,24 @@ class OTAUpdateModule(reactContext: ReactApplicationContext) : ReactContextBaseJ
         prefs.edit().remove("BundlePath").commit()
         android.util.Log.d("OTAUpdate", "Pending bundle cleared")
         promise.resolve(null)
+    }
+
+    // Reload the app - used to apply pending updates
+    @ReactMethod
+    fun reload() {
+        android.util.Log.d("OTAUpdate", "Reload requested...")
+        mainHandler.postDelayed({
+            try {
+                val activity = currentActivity
+                if (activity != null) {
+                    ProcessPhoenix.triggerRebirth(activity)
+                } else {
+                    ProcessPhoenix.triggerRebirth(reactApplicationContext)
+                }
+            } catch (e: Exception) {
+                android.util.Log.e("OTAUpdate", "Reload failed: ${e.message}")
+            }
+        }, 100)
     }
 
     // Utility functions

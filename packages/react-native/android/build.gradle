@@ -49,4 +49,6 @@ repositories {
 dependencies {
     //noinspection GradleDynamicVersion
     implementation "com.facebook.react:react-android:+"
+    // ProcessPhoenix for graceful app restart
+    implementation "com.jakewharton:process-phoenix:3.0.0"
 }
