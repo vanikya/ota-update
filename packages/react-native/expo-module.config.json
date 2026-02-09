@@ -1,8 +1,0 @@
-{
-  "platforms": ["android", "ios"],
-  "android": {
-    "modules": [],
-    "package": "com.otaupdate.OTAUpdatePackage"
-  },
-  "ios": {}
-}
