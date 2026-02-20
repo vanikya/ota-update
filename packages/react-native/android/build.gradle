@@ -5,6 +5,12 @@ def safeExtGet(prop, fallback) {
 apply plugin: 'com.android.library'
 apply plugin: 'kotlin-android'
 
+// Get expo-modules-core if available
+def expoModulesCore = null
+try {
+    expoModulesCore = project(':expo-modules-core')
+} catch (Exception ignored) {}
+
 android {
     namespace "com.otaupdate"
 
@@ -51,4 +57,10 @@ dependencies {
     implementation "com.facebook.react:react-android:+"
     // ProcessPhoenix for graceful app restart
     implementation "com.jakewharton:process-phoenix:3.0.0"
+
+    // Expo modules core - needed for ReactNativeHostHandler interface
+    // compileOnly so we don't bundle it (it's provided by the app)
+    if (expoModulesCore != null) {
+        compileOnly expoModulesCore
+    }
 }

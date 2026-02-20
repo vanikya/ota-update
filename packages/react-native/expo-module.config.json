@@ -1,0 +1,7 @@
+{
+  "platforms": ["android", "ios"],
+  "android": {
+    "package": "com.otaupdate.OTAUpdateExpoPackage"
+  },
+  "ios": {}
+}
